@@ -1,0 +1,174 @@
+.Submit-form {
+  .display-flex();
+  -webkit-box-orient: vertical;
+  .flex-direction(column);
+  .flex-wrap(nowrap);
+  height: 100%;
+  min-height: 400px;
+  margin-bottom: 0;
+  overflow: hidden;
+}
+
+.Submit-centered {
+  width: 100%;
+  max-width: @max-width;
+  margin: 0 auto;
+  position: relative;
+}
+
+.Submit-header {
+  background-color: @white;
+  padding: 8px 10px;
+  height: @top-nav-height;
+  border-bottom: @gray-border;
+  .flex(0, 0, 45px);
+
+  .close {
+    margin: 0 5px;
+  }
+}
+
+.alert.Submit-alert-bar {
+  margin: 0px -5px;
+}
+
+.Submit-header-text {
+  color: @black;
+  font-size: @font-size-h4;
+  margin-left: 8px;
+  position: relative;
+  top: 2px;
+}
+
+.submit-send-btn {
+  position: relative;
+  top: -2px;
+}
+
+.Submit-close {
+  font-size: 1.3em;
+}
+
+.temp-icon {
+  font-size: @icon-size;
+}
+
+.Submit-title {
+  min-height: 50px;
+}
+
+.form-control.full-screen-textarea {
+  border: none;
+  padding: 10px;
+  resize: none;
+  font-size: 1.3em;
+}
+
+.Submit-body {
+  .display-flex();
+  -webkit-box-flex: 1;
+  .flex(1, 1, 200px);
+  -webkit-box-orient: vertical;
+  .flex-direction(column);
+}
+
+.Submit-body-holder {
+  .display-flex();
+  -webkit-box-flex: 1;
+  .flex(1, 1, 200px);
+  position: relative;
+  overflow: hidden;
+}
+
+.form-control.Submit-body-text {
+  padding: 10px;
+  border: none;
+  resize: none;
+}
+
+.Submit-subreddit-choice {
+  border: none;
+}
+
+.Submit-main-form-wrap {
+  position: relative;
+  -webkit-box-flex: 1;
+  .flex(1, 1, 300px);
+  .display-flex();
+  -webkit-box-orient: vertical;
+  .flex-direction(column);
+}
+
+.Submit-sendreplies-box {
+  position: absolute;
+  right: 15px;
+  height: 45px;
+  padding-top: 5px;
+  bottom: -50px;
+  z-index: 1;
+}
+
+.Submit-captcha-heading {
+  max-width: 220px;
+  margin: 0 auto 10px;
+  font-size: 1.4em;
+}
+
+// subreddit-selection
+.submit-posting-to {
+  position: relative;
+  top: -2px;
+}
+
+.sub-selection-wrapper {
+  padding: @grid-gutter-width;
+}
+
+.sub-selection-option {
+  border-bottom: @gray-border;
+  position: relative;
+}
+
+.sub-icon-placeholder {
+  border-radius: 30px;
+  background-color: @light-gray;
+  width:20px;
+  height: 20px;
+  margin-right: 10px;
+  display: inline-block;
+  vertical-align: bottom;
+}
+
+.sub-selection-heading {
+  height: @top-nav-height;
+  background-color: @white;
+  font-size: 1.3em;
+  padding: 10px;
+}
+
+.Submit-search-holder {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.sub-selection-selected {
+  height: @top-nav-height;
+  padding: 15px;
+}
+
+.sub-selection-btn {
+  padding: 10px;
+  width: 85%;
+  text-align: left;
+}
+
+.sub-selection-menu {
+  position: absolute;
+  top: 9px;
+  right: 15px;
+}
+
+.sub-selection-rules {
+  background-color: white;
+  padding: 5px;
+}

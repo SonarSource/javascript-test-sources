@@ -1,0 +1,42 @@
+.icon-font({
+  font-size: @icon-size;
+  line-height: @icon-size;
+  vertical-align: middle;
+  color: @light-gray;
+
+  &:before {
+    vertical-align: inherit;
+  }
+});
+
+button, a {
+  &:hover {
+    .icon-font({
+      color: @gray;
+    });
+  }
+}
+
+.icon-gold:before, .icon-gold-circled:before {
+  color: @gold;
+}
+
+.downvoted {
+  .icon-downvote, .icon-downvote-circled {
+    color: @periwinkle;
+  }
+}
+
+.upvoted {
+  .icon-upvote, .icon-upvote-circled {
+    color: @orangered;
+  }
+}
+
+.icon-xl {
+  font-size: 38px;
+}
+
+.icon-large {
+  font-size: 23px;
+}

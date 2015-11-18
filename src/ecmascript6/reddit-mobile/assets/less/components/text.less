@@ -1,0 +1,262 @@
+a {
+  color: @blue;
+  .icon-inline { color: @blue; }
+
+  &:active {
+    color: lighten(@blue, 20%);
+    .icon-inline { color: lighten(@blue, 20%); }
+  }
+
+  &:visited {
+    color: lighten(@blue, 40%);
+    .icon-inline { color: lighten(@blue, 40%); }
+  }
+}
+
+.text-muted:hover [class*="icon-"] {
+  color: @light-gray;
+}
+
+a.voted.text-upvote:hover,
+a.voted.text-upvote:focus,
+button.upvoted:hover .icon-upvote-circled,
+.text-upvote {
+  color: @orangered;
+}
+
+a.voted.text-downvote:hover,
+a.voted.text-downvote:focus,
+button.downvoted:hover .icon-downvote-circled,
+.text-downvote {
+  color: @periwinkle;
+}
+
+.label.label-default {
+  background: @gray-lighter;
+}
+
+.label.label-large {
+  font-size: 100%;
+}
+
+.label a:hover {
+  text-decoration: none;
+}
+
+.text-admin {
+  color: @admin-text;
+
+  &:after {
+    content: ' [A]';
+  }
+}
+
+.text-moderator {
+  color: @mod-text;
+
+  &:after {
+    content: ' [M]';
+  }
+}
+
+.text-special {
+  color: @special-text;
+}
+
+.linkbar {
+  display: inline-block;
+  margin: (@row-spacing-base / 4) 0 0 0;
+  padding: 0;
+
+  > li {
+    padding: 0;
+    display: inline-block;
+    margin-right: .5em;
+    vertical-align: bottom;
+
+    &:nth-child(n+2)::before {
+      content: '·';
+      padding-right: .5em;
+    }
+  }
+}
+
+.linkbar-single-line {
+  height: 1.5em;
+  overflow: hidden;
+  width: 100%;
+  position: relative;
+
+  &:after {
+   content: '';
+   position: absolute;
+   height: 2em;
+   z-index: 1;
+   bottom: 0;
+   right: 0;
+   width: 3em;
+
+   #gradient > .horizontal(@start-color: rgba(255,255,255,0); @end-color: rgba(255,255,255,1););
+ }
+
+  > .linkbar {
+    width: 1000%;
+  }
+}
+
+.linkbar > li.linkbar-item-no-seperator::before {
+  content: '';
+  padding-right: 0;
+}
+
+.linkbar-compact {
+  vertical-align: middle;
+  margin: 0;
+
+  li:before {
+    display: none;
+  }
+
+  & > li:nth-child(n+2)::before {
+    content: '';
+    padding-right: 0;
+  }
+}
+
+.linkbar-spread {
+  width: 100%;
+  text-align: center;
+  padding: 0;
+
+  > li {
+    float: left;
+  }
+
+  &.linkbar-spread-5 {
+    > li {
+      width: 20%;
+    }
+    > .linkbar-spread-li-double {
+      width: 40%;
+    }
+  }
+
+}
+
+.text-inverted {
+  color: @white;
+}
+
+.text-muted a,
+.text-muted a:visited,
+.text-muted a:hover,
+{
+  &:extend(.text-muted);
+}
+
+.text-muted a:active {
+  color: lighten(@gray-light, 20%);
+}
+
+.text-link,
+.text-muted .text-link {
+  color: @link-color;
+}
+
+.logo-reddit {
+  background: url('/img/snoo-32.png') center right no-repeat;
+  width: 32px;
+  height: 32px;
+  display: inline-block;
+  color: transparent;
+  text-shadow: none;
+  background-color: transparent;
+  border: 0;
+
+  &.logo-small {
+    width: 16px;
+    height: 16px;
+    background-size: 16px;
+  }
+}
+
+@media only screen and (-webkit-min-device-pixel-ratio: 2),
+  only screen and (-moz-min-device-pixel-ratio: 2),
+  only screen and (-o-min-device-pixel-ratio: 2/1),
+  only screen and (min-device-pixel-ratio: 2) {
+
+  .logo-reddit {
+    background: url('/img/snoo-64.png') center right no-repeat;
+    background-size: 32px;
+
+    &.logo-small {
+      background: url('/img/snoo-32.png') center right no-repeat;
+      background-size: 16px;
+    }
+  }
+}
+
+blockquote, table{
+  font-size: inherit;
+}
+
+blockquote {
+  margin: .5rem 0 1rem .5rem;
+  padding: .5rem 1rem;
+}
+
+p {
+  word-wrap: break-word;
+  word-break: keep-all;
+}
+
+.text-small {
+  font-size: 12px;
+
+  [class*=" icon-"] {
+    line-height: 13px;
+  }
+}
+
+.text-super-large {
+  font-size: 128px;
+}
+
+.text-mirror {
+  .scale(-1,1);
+}
+
+.encircle-icon {
+  padding: 3px;
+  color: @white;
+}
+
+dd {
+  margin-bottom: 1em;
+}
+
+.title {
+  color: @blue;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+@media screen and (min-width: 0px) {
+  .jumbotron {
+    padding: 1em;
+    margin-bottom: 0;
+
+    h1 {
+      font-size: 18px;
+    }
+
+    p {
+      font-size: 13px;
+    }
+  }
+}
+
+.sponsored-label {
+  color: lighten(@brand-primary, 20%);
+  text-transform: uppercase;
+}

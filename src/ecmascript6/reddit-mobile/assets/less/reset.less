@@ -1,0 +1,26 @@
+button {
+  background-color: transparent;
+  border: none;
+  outline: none;
+  padding: 0;
+}
+
+svg:not(:root) {
+  overflow: visible !important;
+}
+
+button, a {
+  cursor: pointer;
+
+  &:active {
+    outline: none;
+  }
+}
+
+.form-control, .btn-default {
+  -webkit-box-shadow: none !important;
+  box-shadow: none !important;
+  border: @gray-border !important;
+  outline: none !important;
+  -webkit-appearance: none;
+}

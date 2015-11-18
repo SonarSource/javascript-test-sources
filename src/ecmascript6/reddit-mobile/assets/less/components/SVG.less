@@ -1,0 +1,76 @@
+//icons
+  .SVG-icon {
+    display: inline-block;
+    height: @icon-size;
+    width: @icon-size;
+    vertical-align: middle;
+    font-size: @icon-size;
+    text-align: center;
+  }
+
+    .SVG-fill {
+      fill: @light-gray;
+
+      &.outline {
+        stroke: @light-gray;
+        stroke-width: 0.5;
+      }
+    }
+
+    .text-default .SVG-fill {
+      fill: @btn-default-color;
+    }
+
+    .text-primary .SVG-fill {
+      fill: @brand-primary;
+    }
+
+    .text-info .SVG-fill {
+      fill: @brand-info;
+    }
+
+    .text-warning .SVG-fill {
+      fill: @brand-warning;
+    }
+
+    .text-danger .SVG-fill {
+      fill: @brand-danger;
+    }
+
+    .text-success .SVG-fill {
+      fill: @brand-success;
+    }
+
+    .text-orangered .SVG-fill {
+      fill: @orangered;
+    }
+
+    .text-periwinkle .SVG-fill {
+      fill: @periwinkle;
+    }
+
+    .SVG-fill-bg {
+      fill: @white;
+
+      &.outline {
+        stroke: @white;
+        stroke-width: 0.5;
+      }
+    }
+
+    .SVG-stroke {
+      stroke: @light-gray;
+    }
+
+    .SVG-stroke-bg {
+      stroke: @white;
+    }
+
+//specific to certain icons
+  .Logo {
+    @size: 20px;
+    font-size: @size;
+    height: @size;
+    width: 55px;
+    color: @black;
+  }

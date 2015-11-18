@@ -1,0 +1,82 @@
+.Loading-Container {
+  position: relative;
+  width: 100%;
+
+  .Loading {
+    position: absolute;
+    margin-top: 0;
+  }
+}
+
+.Loading {
+  @size: 76px;
+  position: fixed;
+  width: @size;
+  height: @size;
+  margin: -38px 0 0 -38px;
+  left: 50%;
+  top: 47%;
+
+  &:before {
+    content: '';
+    position: absolute;
+    width: @size;
+    height: @size;
+    background-color: @orangered;
+    opacity: .75;
+    border-radius: 100%;
+    -webkit-animation: scaleout 1.5s infinite ease-in-out;
+    animation: scaleout 1.5s infinite ease-in-out;
+  }
+
+  .SVG-icon {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    line-height: @size;
+    font-size: @size;
+
+    .SVG-fill {
+      fill: @orangered;
+    }
+
+    .SVG-stroke {
+      stroke: @orangered;
+
+      &.mouth {
+        stroke: #000;
+      }
+    }
+  }
+}
+
+.loading-appear {
+  opacity: .01;
+  .transition(opacity .5s ease-in);
+}
+
+.loading-appear.loading-appear-active {
+  opacity: 1;
+}
+
+
+
+@-webkit-keyframes scaleout {
+  0% { -webkit-transform: scale(1) }
+  100% {
+    -webkit-transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+@keyframes scaleout {
+  0% {
+    -webkit-transform: scale(1);
+    transform: scale(1);
+  }
+  100% {
+    -webkit-transform: scale(1.5);
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
