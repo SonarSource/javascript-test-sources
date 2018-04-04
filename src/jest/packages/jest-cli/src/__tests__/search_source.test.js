@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  */
 
@@ -13,7 +12,7 @@ import path from 'path';
 
 jest.setTimeout(15000);
 
-const skipOnWindows = require('../../../../scripts/skip_on_windows');
+const SkipOnWindows = require('../../../../scripts/SkipOnWindows');
 
 const rootDir = path.resolve(__dirname, 'test_root');
 const testRegex = path.sep + '__testtests__' + path.sep;
@@ -26,7 +25,7 @@ let findMatchingTests;
 let normalize;
 
 describe('SearchSource', () => {
-  skipOnWindows.suite();
+  SkipOnWindows.suite();
 
   const name = 'SearchSource';
   let Runtime;
@@ -240,6 +239,26 @@ describe('SearchSource', () => {
       });
     });
 
+    it('finds tests with parentheses in their rootDir when using testMatch', () => {
+      const {options: config} = normalize(
+        {
+          name,
+          rootDir: path.resolve(__dirname, 'test_root_with_(parentheses)'),
+          testMatch: ['<rootDir>**/__testtests__/**/*'],
+          testRegex: null,
+        },
+        {},
+      );
+      return findMatchingTests(config).then(data => {
+        const relPaths = toPaths(data.tests).map(absPath =>
+          path.relative(rootDir, absPath),
+        );
+        expect(relPaths.sort()).toEqual([
+          expect.stringContaining(path.normalize('__testtests__/test.js')),
+        ]);
+      });
+    });
+
     it('finds tests with similar but custom file extensions', () => {
       const {options: config} = normalize(
         {
@@ -374,12 +393,14 @@ describe('SearchSource', () => {
 
     it('finds tests that depend directly on the path', () => {
       const filePath = path.join(rootDir, 'RegularModule.js');
+      const file2Path = path.join(rootDir, 'RequireRegularModule.js');
       const loggingDep = path.join(rootDir, 'logging.js');
       const parentDep = path.join(rootDir, 'ModuleWithSideEffects.js');
       const data = searchSource.findRelatedTests(new Set([filePath]));
       expect(toPaths(data.tests).sort()).toEqual([
         parentDep,
         filePath,
+        file2Path,
         loggingDep,
         rootPath,
       ]);
@@ -441,6 +462,25 @@ describe('SearchSource', () => {
         path.join(rootDir, '__testtests__', 'test.js'),
         path.join(rootDir, '__testtests__', 'test.jsx'),
       ]);
+    });
+
+    it('does not mistake roots folders with prefix names', async () => {
+      const config = normalize(
+        {
+          name,
+          rootDir: '.',
+          roots: ['/foo/bar/prefix'],
+        },
+        {},
+      ).options;
+
+      searchSource = new SearchSource(
+        await Runtime.createContext(config, {maxWorkers}),
+      );
+
+      const input = ['/foo/bar/prefix-suffix/__tests__/my-test.test.js'];
+      const data = searchSource.findTestsByPaths(input);
+      expect(data.tests).toEqual([]);
     });
   });
 });

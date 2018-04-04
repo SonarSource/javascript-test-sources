@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -25,12 +24,16 @@ export type MockFunctionMetadata = {
 type MockFunctionState = {
   instances: Array<any>,
   calls: Array<Array<any>>,
+  returnValues: Array<any>,
+  thrownErrors: Array<any>,
+  timestamps: Array<number>,
 };
 
 type MockFunctionConfig = {
   isReturnValueLastSet: boolean,
   defaultReturnValue: any,
   mockImpl: any,
+  mockName: string,
   specificReturnValues: Array<any>,
   specificMockImpls: Array<any>,
 };
@@ -43,7 +46,6 @@ const FUNCTION_NAME_RESERVED_REPLACE = new RegExp(
   'g',
 );
 
-// $FlowFixMe
 const RESERVED_KEYWORDS = Object.assign(Object.create(null), {
   arguments: true,
   await: true,
@@ -270,6 +272,7 @@ class ModuleMockerClass {
       defaultReturnValue: undefined,
       isReturnValueLastSet: false,
       mockImpl: undefined,
+      mockName: 'jest.fn()',
       specificMockImpls: [],
       specificReturnValues: [],
     };
@@ -279,6 +282,9 @@ class ModuleMockerClass {
     return {
       calls: [],
       instances: [],
+      returnValues: [],
+      thrownErrors: [],
+      timestamps: [],
     };
   }
 
@@ -313,57 +319,88 @@ class ModuleMockerClass {
         const mockConfig = mocker._ensureMockConfig(f);
         mockState.instances.push(this);
         mockState.calls.push(Array.prototype.slice.call(arguments));
-        if (this instanceof f) {
-          // This is probably being called as a constructor
-          prototypeSlots.forEach(slot => {
-            // Copy prototype methods to the instance to make
-            // it easier to interact with mock instance call and
-            // return values
-            if (prototype[slot].type === 'function') {
-              const protoImpl = this[slot];
-              this[slot] = mocker.generateFromMetadata(prototype[slot]);
-              this[slot]._protoImpl = protoImpl;
+        mockState.timestamps.push(Date.now());
+
+        // Will be set to the return value of the mock if an error is not thrown
+        let finalReturnValue;
+        // Will be set to the error that is thrown by the mock (if it throws)
+        let thrownError;
+
+        try {
+          // The bulk of the implementation is wrapped in an immediately
+          // executed arrow function so the return value of the mock function
+          // can be easily captured and recorded, despite the many separate
+          // return points within the logic.
+          finalReturnValue = (() => {
+            if (this instanceof f) {
+              // This is probably being called as a constructor
+              prototypeSlots.forEach(slot => {
+                // Copy prototype methods to the instance to make
+                // it easier to interact with mock instance call and
+                // return values
+                if (prototype[slot].type === 'function') {
+                  const protoImpl = this[slot];
+                  this[slot] = mocker.generateFromMetadata(prototype[slot]);
+                  this[slot]._protoImpl = protoImpl;
+                }
+              });
+
+              // Run the mock constructor implementation
+              const mockImpl = mockConfig.specificMockImpls.length
+                ? mockConfig.specificMockImpls.shift()
+                : mockConfig.mockImpl;
+              return mockImpl && mockImpl.apply(this, arguments);
             }
-          });
 
-          // Run the mock constructor implementation
-          return (
-            mockConfig.mockImpl && mockConfig.mockImpl.apply(this, arguments)
-          );
+            const returnValue = mockConfig.defaultReturnValue;
+            // If return value is last set, either specific or default, i.e.
+            // mockReturnValueOnce()/mockReturnValue() is called and no
+            // mockImplementationOnce()/mockImplementation() is called after
+            // that.
+            // use the set return value.
+            if (mockConfig.specificReturnValues.length) {
+              return mockConfig.specificReturnValues.shift();
+            }
+
+            if (mockConfig.isReturnValueLastSet) {
+              return mockConfig.defaultReturnValue;
+            }
+
+            // If mockImplementationOnce()/mockImplementation() is last set,
+            // or specific return values are used up, use the mock
+            // implementation.
+            let specificMockImpl;
+            if (returnValue === undefined) {
+              specificMockImpl = mockConfig.specificMockImpls.shift();
+              if (specificMockImpl === undefined) {
+                specificMockImpl = mockConfig.mockImpl;
+              }
+              if (specificMockImpl) {
+                return specificMockImpl.apply(this, arguments);
+              }
+            }
+
+            // Otherwise use prototype implementation
+            if (returnValue === undefined && f._protoImpl) {
+              return f._protoImpl.apply(this, arguments);
+            }
+
+            return returnValue;
+          })();
+        } catch (error) {
+          // Store the thrown error so we can record it, then re-throw it.
+          thrownError = error;
+          throw error;
+        } finally {
+          // Record the return value of the mock function.
+          // If the mock threw an error, then the value will be undefined.
+          mockState.returnValues.push(finalReturnValue);
+          // Record the error thrown by the mock function.
+          // If no error was thrown, then the value will be udnefiend.
+          mockState.thrownErrors.push(thrownError);
         }
 
-        const returnValue = mockConfig.defaultReturnValue;
-        // If return value is last set, either specific or default, i.e.
-        // mockReturnValueOnce()/mockReturnValue() is called and no
-        // mockImplementationOnce()/mockImplementation() is called after that.
-        // use the set return value.
-        if (mockConfig.specificReturnValues.length) {
-          return mockConfig.specificReturnValues.shift();
-        }
-
-        if (mockConfig.isReturnValueLastSet) {
-          return mockConfig.defaultReturnValue;
-        }
-
-        // If mockImplementationOnce()/mockImplementation() is last set,
-        // or specific return values are used up, use the mock implementation.
-        let specificMockImpl;
-        if (returnValue === undefined) {
-          specificMockImpl = mockConfig.specificMockImpls.shift();
-          if (specificMockImpl === undefined) {
-            specificMockImpl = mockConfig.mockImpl;
-          }
-          if (specificMockImpl) {
-            return specificMockImpl.apply(this, arguments);
-          }
-        }
-
-        // Otherwise use prototype implementation
-        if (returnValue === undefined && f._protoImpl) {
-          return f._protoImpl.apply(this, arguments);
-        }
-
-        return returnValue;
+        return finalReturnValue;
       }, metadata.length || 0);
 
       f = this._createMockFunction(metadata, mockConstructor);
@@ -403,6 +440,12 @@ class ModuleMockerClass {
         return f;
       };
 
+      f.mockResolvedValueOnce = value =>
+        f.mockImplementationOnce(() => Promise.resolve(value));
+
+      f.mockRejectedValueOnce = value =>
+        f.mockImplementationOnce(() => Promise.reject(value));
+
       f.mockReturnValue = value => {
         // next function call will return specified return value or this one
         const mockConfig = this._ensureMockConfig(f);
@@ -410,6 +453,12 @@ class ModuleMockerClass {
         mockConfig.defaultReturnValue = value;
         return f;
       };
+
+      f.mockResolvedValue = value =>
+        f.mockImplementation(() => Promise.resolve(value));
+
+      f.mockRejectedValue = value =>
+        f.mockImplementation(() => Promise.reject(value));
 
       f.mockImplementationOnce = fn => {
         // next function call will use this mock implementation return value
@@ -433,6 +482,19 @@ class ModuleMockerClass {
         f.mockImplementation(function() {
           return this;
         });
+
+      f.mockName = name => {
+        if (name) {
+          const mockConfig = this._ensureMockConfig(f);
+          mockConfig.mockName = name;
+        }
+        return f;
+      };
+
+      f.getMockName = () => {
+        const mockConfig = this._ensureMockConfig(f);
+        return mockConfig.mockName || 'jest.fn()';
+      };
 
       if (metadata.mockImpl) {
         f.mockImplementation(metadata.mockImpl);
@@ -630,7 +692,7 @@ class ModuleMockerClass {
   }
 
   isMockFunction(fn: any): boolean {
-    return !!fn._isMockFunction;
+    return !!(fn && fn._isMockFunction);
   }
 
   fn(implementation?: any): any {
@@ -642,13 +704,27 @@ class ModuleMockerClass {
     return fn;
   }
 
-  spyOn(object: any, methodName: any): any {
+  spyOn(object: any, methodName: any, accessType?: string): any {
+    if (accessType) {
+      return this._spyOnProperty(object, methodName, accessType);
+    }
+
+    if (typeof object !== 'object' && typeof object !== 'function') {
+      throw new Error(
+        'Cannot spyOn on a primitive value; ' + this._typeOf(object) + ' given',
+      );
+    }
+
     const original = object[methodName];
 
     if (!this.isMockFunction(original)) {
       if (typeof original !== 'function') {
         throw new Error(
-          'Cannot spyOn the ' + methodName + ' property; it is not a function',
+          'Cannot spy the ' +
+            methodName +
+            ' property because it is not a function; ' +
+            this._typeOf(original) +
+            ' given instead',
         );
       }
 
@@ -664,6 +740,72 @@ class ModuleMockerClass {
     return object[methodName];
   }
 
+  _spyOnProperty(obj: any, propertyName: any, accessType: string = 'get'): any {
+    if (typeof obj !== 'object' && typeof obj !== 'function') {
+      throw new Error(
+        'Cannot spyOn on a primitive value; ' + this._typeOf(obj) + ' given',
+      );
+    }
+
+    if (!obj) {
+      throw new Error(
+        'spyOn could not find an object to spy upon for ' + propertyName + '',
+      );
+    }
+
+    if (!propertyName) {
+      throw new Error('No property name supplied');
+    }
+
+    let descriptor = Object.getOwnPropertyDescriptor(obj, propertyName);
+    let proto = Object.getPrototypeOf(obj);
+
+    while (!descriptor && proto !== null) {
+      descriptor = Object.getOwnPropertyDescriptor(proto, propertyName);
+      proto = Object.getPrototypeOf(proto);
+    }
+
+    if (!descriptor) {
+      throw new Error(propertyName + ' property does not exist');
+    }
+
+    if (!descriptor.configurable) {
+      throw new Error(propertyName + ' is not declared configurable');
+    }
+
+    if (!descriptor[accessType]) {
+      throw new Error(
+        'Property ' + propertyName + ' does not have access type ' + accessType,
+      );
+    }
+
+    const original = descriptor[accessType];
+
+    if (!this.isMockFunction(original)) {
+      if (typeof original !== 'function') {
+        throw new Error(
+          'Cannot spy the ' +
+            propertyName +
+            ' property because it is not a function; ' +
+            this._typeOf(original) +
+            ' given instead',
+        );
+      }
+
+      descriptor[accessType] = this._makeComponent({type: 'function'}, () => {
+        descriptor[accessType] = original;
+        Object.defineProperty(obj, propertyName, descriptor);
+      });
+
+      descriptor[accessType].mockImplementation(function() {
+        return original.apply(this, arguments);
+      });
+    }
+
+    Object.defineProperty(obj, propertyName, descriptor);
+    return descriptor[accessType];
+  }
+
   clearAllMocks() {
     this._mockState = new WeakMap();
   }
@@ -676,6 +818,10 @@ class ModuleMockerClass {
   restoreAllMocks() {
     this._spyState.forEach(restore => restore());
     this._spyState = new Set();
+  }
+
+  _typeOf(value: any): string {
+    return value == null ? '' + value : typeof value;
   }
 }
 

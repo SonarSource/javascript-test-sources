@@ -1,29 +1,40 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
 
 import type {Argv} from 'types/Argv';
-import type {GlobalConfig, Path, ProjectConfig} from 'types/Config';
+import type {
+  GlobalConfig,
+  InitialOptions,
+  Path,
+  ProjectConfig,
+} from 'types/Config';
 
-import {getTestEnvironment, isJSONString} from './utils';
+import path from 'path';
+import {isJSONString} from './utils';
 import normalize from './normalize';
 import resolveConfigPath from './resolve_config_path';
 import readConfigFileAndSetRootDir from './read_config_file_and_set_root_dir';
 
-function readConfig(
+export {getTestEnvironment, isJSONString} from './utils';
+export {default as normalize} from './normalize';
+export {default as deprecationEntries} from './deprecated';
+export {replaceRootDirInPath} from './utils';
+
+export function readConfig(
   argv: Argv,
-  packageRoot: string,
+  packageRootOrConfig: Path | InitialOptions,
   // Whether it needs to look into `--config` arg passed to CLI.
   // It only used to read initial config. If the initial config contains
   // `project` property, we don't want to read `--config` value and rather
   // read individual configs for every project.
   skipArgvConfigOption?: boolean,
+  parentConfigPath: ?Path,
 ): {
   configPath: ?Path,
   globalConfig: GlobalConfig,
@@ -31,11 +42,20 @@ function readConfig(
   projectConfig: ProjectConfig,
 } {
   let rawOptions;
-  let configPath;
+  let configPath = null;
 
-  // A JSON string was passed to `--config` argument and we can parse it
-  // and use as is.
-  if (isJSONString(argv.config)) {
+  if (typeof packageRootOrConfig !== 'string') {
+    if (parentConfigPath) {
+      rawOptions = packageRootOrConfig;
+      rawOptions.rootDir = path.dirname(parentConfigPath);
+    } else {
+      throw new Error(
+        'Jest: Cannot use configuration as an object without a file path.',
+      );
+    }
+  } else if (isJSONString(argv.config)) {
+    // A JSON string was passed to `--config` argument and we can parse it
+    // and use as is.
     let config;
     try {
       config = JSON.parse(argv.config);
@@ -46,16 +66,16 @@ function readConfig(
     }
 
     // NOTE: we might need to resolve this dir to an absolute path in the future
-    config.rootDir = config.rootDir || packageRoot;
+    config.rootDir = config.rootDir || packageRootOrConfig;
     rawOptions = config;
     // A string passed to `--config`, which is either a direct path to the config
-    // or a path to directory containing `package.json` or `jest.conf.js`
+    // or a path to directory containing `package.json` or `jest.config.js`
   } else if (!skipArgvConfigOption && typeof argv.config == 'string') {
     configPath = resolveConfigPath(argv.config, process.cwd());
     rawOptions = readConfigFileAndSetRootDir(configPath);
   } else {
     // Otherwise just try to find config in the current rootDir.
-    configPath = resolveConfigPath(packageRoot, process.cwd());
+    configPath = resolveConfigPath(packageRootOrConfig, process.cwd());
     rawOptions = readConfigFileAndSetRootDir(configPath);
   }
 
@@ -76,27 +96,34 @@ const getConfigs = (
     globalConfig: Object.freeze({
       bail: options.bail,
       changedFilesWithAncestor: options.changedFilesWithAncestor,
+      changedSince: options.changedSince,
       collectCoverage: options.collectCoverage,
       collectCoverageFrom: options.collectCoverageFrom,
       collectCoverageOnlyFrom: options.collectCoverageOnlyFrom,
       coverageDirectory: options.coverageDirectory,
       coverageReporters: options.coverageReporters,
       coverageThreshold: options.coverageThreshold,
+      detectLeaks: options.detectLeaks,
+      enabledTestsMap: options.enabledTestsMap,
       expand: options.expand,
       findRelatedTests: options.findRelatedTests,
       forceExit: options.forceExit,
+      globalSetup: options.globalSetup,
+      globalTeardown: options.globalTeardown,
       json: options.json,
       lastCommit: options.lastCommit,
       listTests: options.listTests,
       logHeapUsage: options.logHeapUsage,
-      mapCoverage: options.mapCoverage,
       maxWorkers: options.maxWorkers,
       noSCM: undefined,
       noStackTrace: options.noStackTrace,
       nonFlagArgs: options.nonFlagArgs,
       notify: options.notify,
+      notifyMode: options.notifyMode,
       onlyChanged: options.onlyChanged,
+      onlyFailures: options.onlyFailures,
       outputFile: options.outputFile,
+      passWithNoTests: options.passWithNoTests,
       projects: options.projects,
       replname: options.replname,
       reporters: options.reporters,
@@ -112,6 +139,7 @@ const getConfigs = (
       verbose: options.verbose,
       watch: options.watch,
       watchAll: options.watchAll,
+      watchPlugins: options.watchPlugins,
       watchman: options.watchman,
     }),
     projectConfig: Object.freeze({
@@ -122,7 +150,9 @@ const getConfigs = (
       clearMocks: options.clearMocks,
       coveragePathIgnorePatterns: options.coveragePathIgnorePatterns,
       cwd: options.cwd,
+      detectLeaks: options.detectLeaks,
       displayName: options.displayName,
+      forceCoverageMatch: options.forceCoverageMatch,
       globals: options.globals,
       haste: options.haste,
       moduleDirectories: options.moduleDirectories,
@@ -135,6 +165,7 @@ const getConfigs = (
       resetMocks: options.resetMocks,
       resetModules: options.resetModules,
       resolver: options.resolver,
+      restoreMocks: options.restoreMocks,
       rootDir: options.rootDir,
       roots: options.roots,
       runner: options.runner,
@@ -143,6 +174,8 @@ const getConfigs = (
       skipNodeResolution: options.skipNodeResolution,
       snapshotSerializers: options.snapshotSerializers,
       testEnvironment: options.testEnvironment,
+      testEnvironmentOptions: options.testEnvironmentOptions,
+      testLocationInResults: options.testLocationInResults,
       testMatch: options.testMatch,
       testPathIgnorePatterns: options.testPathIgnorePatterns,
       testRegex: options.testRegex,
@@ -155,11 +188,4 @@ const getConfigs = (
       watchPathIgnorePatterns: options.watchPathIgnorePatterns,
     }),
   };
-};
-
-module.exports = {
-  getTestEnvironment,
-  isJSONString,
-  normalize,
-  readConfig,
 };

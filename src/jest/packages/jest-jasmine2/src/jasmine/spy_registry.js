@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  */
 // This file is a heavily modified fork of Jasmine. Original license:
@@ -65,7 +64,11 @@ export default function SpyRegistry(options: Object) {
     this.respy = allow;
   };
 
-  this.spyOn = function(obj, methodName) {
+  this.spyOn = function(obj, methodName, accessType?: string) {
+    if (accessType) {
+      return this._spyOnProperty(obj, methodName, accessType);
+    }
+
     if (obj === void 0) {
       throw new Error(
         getErrorMsg(
@@ -128,6 +131,82 @@ export default function SpyRegistry(options: Object) {
     obj[methodName] = spiedMethod;
 
     return spiedMethod;
+  };
+
+  this._spyOnProperty = function(obj, propertyName, accessType = 'get') {
+    if (!obj) {
+      throw new Error(
+        getErrorMsg('could not find an object to spy upon for ' + propertyName),
+      );
+    }
+
+    if (!propertyName) {
+      throw new Error(getErrorMsg('No property name supplied'));
+    }
+
+    let descriptor;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(obj, propertyName);
+    } catch (e) {
+      // IE 8 doesn't support `definePropery` on non-DOM nodes
+    }
+
+    if (!descriptor) {
+      throw new Error(getErrorMsg(propertyName + ' property does not exist'));
+    }
+
+    if (!descriptor.configurable) {
+      throw new Error(
+        getErrorMsg(propertyName + ' is not declared configurable'),
+      );
+    }
+
+    if (!descriptor[accessType]) {
+      throw new Error(
+        getErrorMsg(
+          'Property ' +
+            propertyName +
+            ' does not have access type ' +
+            accessType,
+        ),
+      );
+    }
+
+    if (obj[propertyName] && isSpy(obj[propertyName])) {
+      if (this.respy) {
+        return obj[propertyName];
+      } else {
+        throw new Error(
+          getErrorMsg(propertyName + ' has already been spied upon'),
+        );
+      }
+    }
+
+    const originalDescriptor = descriptor;
+    const spiedProperty = createSpy(propertyName, descriptor[accessType]);
+    let restoreStrategy;
+
+    if (Object.prototype.hasOwnProperty.call(obj, propertyName)) {
+      restoreStrategy = function() {
+        Object.defineProperty(obj, propertyName, originalDescriptor);
+      };
+    } else {
+      restoreStrategy = function() {
+        delete obj[propertyName];
+      };
+    }
+
+    currentSpies().push({
+      restoreObjectToOriginalState: restoreStrategy,
+    });
+
+    const spiedDescriptor = Object.assign({}, descriptor, {
+      [accessType]: spiedProperty,
+    });
+
+    Object.defineProperty(obj, propertyName, spiedDescriptor);
+
+    return spiedProperty;
   };
 
   this.clearSpies = function() {

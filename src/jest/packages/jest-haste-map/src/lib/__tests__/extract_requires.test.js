@@ -2,9 +2,8 @@
  * Copyright (c) 2015-present, Facebook, Inc.
  * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -16,9 +15,10 @@ it('extracts both requires and imports from code', () => {
   const code = `
       import module1 from 'module1';
       const module2 = require('module2');
+      import('module3').then(module3 => {})';
     `;
 
-  expect(extractRequires(code)).toEqual(['module1', 'module2']);
+  expect(extractRequires(code)).toEqual(['module1', 'module2', 'module3']);
 });
 
 it('extracts requires in order', () => {

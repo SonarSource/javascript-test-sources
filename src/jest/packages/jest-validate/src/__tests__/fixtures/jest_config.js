@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -40,9 +39,11 @@ const defaultConfig = {
   modulePathIgnorePatterns: [],
   noStackTrace: false,
   notify: false,
+  notifyMode: 'always',
   preset: null,
   resetMocks: false,
   resetModules: false,
+  restoreMocks: false,
   roots: ['<rootDir>'],
   snapshotSerializers: [],
   testEnvironment: 'jest-environment-jsdom',
@@ -68,7 +69,7 @@ const validConfig = {
   collectCoverage: true,
   collectCoverageFrom: ['src', '!public'],
   collectCoverageOnlyFrom: {
-    '<rootDir>/this-directory-is-covered/covered.js': true,
+    '<rootDir>/this-directory-is-covered/Covered.js': true,
   },
   coverageDirectory: 'coverage',
   coveragePathIgnorePatterns: [NODE_MODULES_REGEXP],
@@ -96,13 +97,15 @@ const validConfig = {
   name: 'string',
   noStackTrace: false,
   notify: false,
+  notifyMode: 'always',
   preset: 'react-native',
   resetMocks: false,
   resetModules: false,
+  restoreMocks: false,
   rootDir: '/',
   roots: ['<rootDir>'],
   setupFiles: ['<rootDir>/setup.js'],
-  setupTestFrameworkScriptFile: '<rootDir>/test_setup_file.js',
+  setupTestFrameworkScriptFile: '<rootDir>/testSetupFile.js',
   silent: true,
   snapshotSerializers: ['my-serializer-module'],
   testEnvironment: 'jest-environment-jsdom',

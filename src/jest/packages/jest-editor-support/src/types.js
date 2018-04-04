@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -13,14 +12,24 @@ export type Location = {
   line: number,
 };
 
+export type SpawnOptions = {
+  shell?: boolean,
+};
+
 import type {ChildProcess} from 'child_process';
 import type ProjectWorkspace from './project_workspace';
 
 export type Options = {
+  coverage?: boolean,
   createProcess?: (
     workspace: ProjectWorkspace,
     args: Array<string>,
+    options?: SpawnOptions,
   ) => ChildProcess,
+  noColor?: boolean,
+  testNamePattern?: string,
+  testFileNamePattern?: string,
+  shell?: boolean,
 };
 
 /**
@@ -57,3 +66,15 @@ export type TestAssertionStatus = {
   terseMessage: ?string,
   line: ?number,
 };
+
+export type JestTotalResultsMeta = {
+  noTestsFound: boolean,
+};
+
+export const messageTypes = {
+  noTests: 1,
+  unknown: 0,
+  watchUsage: 2,
+};
+
+export type MessageType = number;

@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  */
 
@@ -168,6 +167,7 @@ describe('ScriptTransformer', () => {
   };
 
   beforeEach(reset);
+  afterEach(() => jest.unmock('../should_instrument'));
 
   it('transforms a file properly', () => {
     const scriptTransformer = new ScriptTransformer(config);
@@ -202,6 +202,26 @@ describe('ScriptTransformer', () => {
     // If we disable coverage, we get a different result.
     scriptTransformer.transform('/fruits/kiwi.js', {collectCoverage: false});
     expect(vm.Script.mock.calls[1][0]).toEqual(snapshot);
+  });
+
+  it('does not transform Node core modules', () => {
+    jest.mock('../should_instrument');
+
+    const shouldInstrument = require('../should_instrument').default;
+    const scriptTransformer = new ScriptTransformer(config);
+    const fsSourceCode = process.binding('natives').fs;
+
+    const response = scriptTransformer.transform(
+      'fs',
+      {isCoreModule: true},
+      fsSourceCode,
+    ).script;
+
+    expect(response instanceof vm.Script).toBe(true);
+    expect(vm.Script.mock.calls[0][0]).toContain(fsSourceCode);
+
+    // Native files should never be transformed.
+    expect(shouldInstrument.mock.calls.length).toBe(0);
   });
 
   it(
@@ -298,7 +318,6 @@ describe('ScriptTransformer', () => {
 
     const result = scriptTransformer.transform('/fruits/banana.js', {
       collectCoverage: true,
-      mapCoverage: true,
     });
     expect(result.sourceMapPath).toEqual(expect.any(String));
     const mapStr = JSON.stringify(map);
@@ -327,15 +346,16 @@ describe('ScriptTransformer', () => {
 
     const result = scriptTransformer.transform('/fruits/banana.js', {
       collectCoverage: true,
-      mapCoverage: true,
     });
     expect(result.sourceMapPath).toEqual(expect.any(String));
-    expect(
-      writeFileAtomic.sync,
-    ).toBeCalledWith(result.sourceMapPath, sourceMap, {encoding: 'utf8'});
+    expect(writeFileAtomic.sync).toBeCalledWith(
+      result.sourceMapPath,
+      sourceMap,
+      {encoding: 'utf8'},
+    );
   });
 
-  it('does not write source map if mapCoverage option is false', () => {
+  it('writes source maps if given by the transformer', () => {
     config = Object.assign(config, {
       transform: [['^.+\\.js$', 'preprocessor-with-sourcemaps']],
     });
@@ -353,7 +373,30 @@ describe('ScriptTransformer', () => {
 
     const result = scriptTransformer.transform('/fruits/banana.js', {
       collectCoverage: true,
-      mapCoverage: false,
+    });
+    expect(result.sourceMapPath).toEqual(expect.any(String));
+    expect(writeFileAtomic.sync).toBeCalledWith(
+      result.sourceMapPath,
+      JSON.stringify(map),
+      {
+        encoding: 'utf8',
+      },
+    );
+  });
+
+  it('does not write source map if not given by the transformer', () => {
+    config = Object.assign(config, {
+      transform: [['^.+\\.js$', 'preprocessor-with-sourcemaps']],
+    });
+    const scriptTransformer = new ScriptTransformer(config);
+
+    require('preprocessor-with-sourcemaps').process.mockReturnValue({
+      code: 'content',
+      map: null,
+    });
+
+    const result = scriptTransformer.transform('/fruits/banana.js', {
+      collectCoverage: true,
     });
     expect(result.sourceMapPath).toBeFalsy();
     expect(writeFileAtomic.sync).toHaveBeenCalledTimes(1);
@@ -367,7 +410,6 @@ describe('ScriptTransformer', () => {
 
     scriptTransformer.transform('/fruits/banana.js', {
       collectCoverage: true,
-      mapCoverage: true,
     });
 
     const {getCacheKey} = require('test_preprocessor');

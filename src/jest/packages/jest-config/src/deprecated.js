@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -14,6 +13,12 @@ import prettyFormat from 'pretty-format';
 const format = (value: mixed) => prettyFormat(value, {min: true});
 
 export default {
+  mapCoverage: () => `  Option ${chalk.bold(
+    '"mapCoverage"',
+  )} has been removed, as it's no longer necessary.
+
+  Please update your configuration.`,
+
   preprocessorIgnorePatterns: (options: {
     preprocessorIgnorePatterns: Array<string>,
   }) => `  Option ${chalk.bold(
@@ -25,7 +30,7 @@ export default {
   Jest now treats your current configuration as:
   {
     ${chalk.bold('"transformIgnorePatterns"')}: ${chalk.bold(
-    `${format(options.preprocessorIgnorePatterns)}`,
+    format(options.preprocessorIgnorePatterns),
   )}
   }
 

@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -43,7 +42,7 @@ type ErrorWithCode = Error & {code?: string};
 
 import fs from 'fs';
 import path from 'path';
-import isBuiltinModule from 'is-builtin-module';
+import isBuiltinModule from './is_builtin_module';
 
 import nodeModulesPaths from './node_modules_paths';
 
@@ -95,6 +94,11 @@ function resolveSync(target: Path, options: ResolverOptions): Path {
     if (isDirectory(dir)) {
       result = resolveAsFile(name) || resolveAsDirectory(name);
     }
+    if (result) {
+      // Dereference symlinks to ensure we don't create a separate
+      // module instance depending on how it was referenced.
+      result = fs.realpathSync(result);
+    }
     return result;
   }
 
@@ -125,7 +129,7 @@ function resolveSync(target: Path, options: ResolverOptions): Path {
       pkgmain = JSON.parse(body).main;
     } catch (e) {}
 
-    if (pkgmain) {
+    if (pkgmain && pkgmain !== '.') {
       const resolveTarget = path.resolve(name, pkgmain);
       const result = tryResolve(resolveTarget);
       if (result) {
@@ -163,7 +167,7 @@ function isDirectory(dir: Path): boolean {
     const stat = fs.statSync(dir);
     result = stat.isDirectory();
   } catch (e) {
-    if (!(e && e.code === 'ENOENT')) {
+    if (!(e && (e.code === 'ENOENT' || e.code === 'ENOTDIR'))) {
       throw e;
     }
     result = false;

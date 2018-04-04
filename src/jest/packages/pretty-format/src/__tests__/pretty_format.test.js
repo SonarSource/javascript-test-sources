@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -550,6 +549,66 @@ describe('prettyFormat()', () => {
     }).toThrow();
   });
 
+  it('throws PrettyFormatPluginError if test throws an error', () => {
+    expect.hasAssertions();
+    const options = {
+      plugins: [
+        {
+          print: () => '',
+          test() {
+            throw new Error('Where is the error?');
+          },
+        },
+      ],
+    };
+
+    try {
+      prettyFormat('', options);
+    } catch (error) {
+      expect(error.name).toBe('PrettyFormatPluginError');
+    }
+  });
+
+  it('throws PrettyFormatPluginError if print throws an error', () => {
+    expect.hasAssertions();
+    const options = {
+      plugins: [
+        {
+          print: () => {
+            throw new Error('Where is the error?');
+          },
+          test: () => true,
+        },
+      ],
+    };
+
+    try {
+      prettyFormat('', options);
+    } catch (error) {
+      expect(error.name).toBe('PrettyFormatPluginError');
+    }
+  });
+
+  it('throws PrettyFormatPluginError if serialize throws an error', () => {
+    expect.hasAssertions();
+    const options = {
+      plugins: [
+        {
+          serialize: () => {
+            throw new Error('Where is the error?');
+          },
+          test: () => true,
+        },
+      ],
+    };
+
+    try {
+      prettyFormat('', options);
+    } catch (error) {
+      expect(error.name).toBe('PrettyFormatPluginError');
+    }
+  });
+
   it('supports plugins with deeply nested arrays (#24)', () => {
     const val = [[1, 2], [3, 4]];
     expect(
@@ -590,6 +649,17 @@ describe('prettyFormat()', () => {
     expect(prettyFormat(Object.create(null))).toEqual('Object {}');
   });
 
+  it('prints identity-obj-proxy with string constructor', () => {
+    const val = Object.create(null);
+    val.constructor = 'constructor'; // mock the mock object :)
+    const expected = [
+      'Object {', // Object instead of undefined
+      '  "constructor": "constructor",',
+      '}',
+    ].join('\n');
+    expect(prettyFormat(val)).toEqual(expected);
+  });
+
   it('calls toJSON and prints its return value', () => {
     expect(
       prettyFormat({
@@ -617,13 +687,13 @@ describe('prettyFormat()', () => {
     ).toEqual('Object {\n  "toJSON": false,\n  "value": true,\n}');
   });
 
-  it('calls toJSON recursively', () => {
+  it('does not call toJSON recursively', () => {
     expect(
       prettyFormat({
         toJSON: () => ({toJSON: () => ({value: true})}),
         value: false,
       }),
-    ).toEqual('Object {\n  "value": true,\n}');
+    ).toEqual('Object {\n  "toJSON": [Function toJSON],\n}');
   });
 
   it('calls toJSON on Sets', () => {

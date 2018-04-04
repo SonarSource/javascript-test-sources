@@ -1,14 +1,13 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
 
-import type {Options} from './types';
+import type {Options, SpawnOptions} from './types';
 
 import {ChildProcess} from 'child_process';
 import EventEmitter from 'events';
@@ -33,46 +32,60 @@ type ConfigRepresentation = {
   testMatch: Array<Glob>,
 };
 
+type ConfigRepresentations = Array<ConfigRepresentation>;
+
 export default class Settings extends EventEmitter {
   getConfigProcess: ChildProcess;
   jestVersionMajor: number | null;
   _createProcess: (
     workspace: ProjectWorkspace,
     args: Array<string>,
+    options: SpawnOptions,
   ) => ChildProcess;
+  configs: ConfigRepresentations;
   settings: ConfigRepresentation;
   workspace: ProjectWorkspace;
+  spawnOptions: SpawnOptions;
 
   constructor(workspace: ProjectWorkspace, options?: Options) {
     super();
     this.workspace = workspace;
     this._createProcess = (options && options.createProcess) || createProcess;
+    this.spawnOptions = {shell: options && options.shell};
 
     // Defaults for a Jest project
     this.settings = {
-      testMatch: ['**/__tests__/**/*.js?(x)', '**/?(*.)(spec|test).js?(x)'],
+      testMatch: ['**/__tests__/**/*.js?(x)', '**/?(*.)+(spec|test).js?(x)'],
       testRegex: '(/__tests__/.*|\\.(test|spec))\\.jsx?$',
     };
+
+    this.configs = [this.settings];
   }
 
-  getConfig(completed: any) {
-    this.getConfigProcess = this._createProcess(this.workspace, [
-      '--showConfig',
-    ]);
+  getConfigs(completed: any) {
+    this.getConfigProcess = this._createProcess(
+      this.workspace,
+      ['--showConfig'],
+      this.spawnOptions,
+    );
 
     this.getConfigProcess.stdout.on('data', (data: Buffer) => {
-      const {config, version} = JSON.parse(data.toString());
-      // We can give warnings to versions under 17 now
-      // See https://github.com/facebook/jest/issues/2343 for moving this into
-      // the config object
-
-      this.jestVersionMajor = parseInt(version.split('.').shift(), 10);
-      this.settings = config;
+      const settings = JSON.parse(data.toString());
+      this.jestVersionMajor = parseInt(settings.version.split('.').shift(), 10);
+      this.configs =
+        this.jestVersionMajor >= 21 ? settings.configs : [settings.config];
     });
 
     // They could have an older build of Jest which
     // would error with `--showConfig`
     this.getConfigProcess.on('close', () => {
+      completed();
+    });
+  }
+
+  getConfig(completed: any, index: number = 0) {
+    this.getConfigs(() => {
+      this.settings = this.configs[index];
       completed();
     });
   }

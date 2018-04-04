@@ -1,9 +1,8 @@
 /**
- * Copyright (c) 2014, Facebook, Inc. All rights reserved.
+ * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -14,7 +13,6 @@ import getType from 'jest-get-type';
 import {escapeStrForRegex} from 'jest-regex-util';
 import {formatStackTrace, separateMessageFromStack} from 'jest-message-util';
 import {
-  RECEIVED_BG,
   RECEIVED_COLOR,
   highlightTrailingWhitespace,
   matcherHint,
@@ -22,27 +20,34 @@ import {
   printWithType,
 } from 'jest-matcher-utils';
 import {equals} from './jasmine_utils';
+import {isError} from './utils';
 
-const createMatcher = matcherName => (
+export const createMatcher = (matcherName: string, fromPromise?: boolean) => (
   actual: Function,
   expected: string | Error | RegExp,
 ) => {
   const value = expected;
   let error;
 
-  if (typeof actual !== 'function') {
-    throw new Error(
-      matcherHint(matcherName, 'function', getType(value)) +
-        '\n\n' +
-        'Received value must be a function, but instead ' +
-        `"${getType(actual)}" was found`,
-    );
-  }
-
-  try {
-    actual();
-  } catch (e) {
-    error = e;
+  if (fromPromise && isError(actual)) {
+    error = actual;
+  } else {
+    if (typeof actual !== 'function') {
+      if (!fromPromise) {
+        throw new Error(
+          matcherHint(matcherName, 'function', getType(value)) +
+            '\n\n' +
+            'Received value must be a function, but instead ' +
+            `"${getType(actual)}" was found`,
+        );
+      }
+    } else {
+      try {
+        actual();
+      } catch (e) {
+        error = e;
+      }
+    }
   }
 
   if (typeof expected === 'string') {
@@ -51,10 +56,15 @@ const createMatcher = matcherName => (
 
   if (typeof expected === 'function') {
     return toThrowMatchingError(matcherName, error, expected);
-  } else if (expected instanceof RegExp) {
-    return toThrowMatchingStringOrRegexp(matcherName, error, expected, value);
+  } else if (expected && typeof expected.test === 'function') {
+    return toThrowMatchingStringOrRegexp(
+      matcherName,
+      error,
+      (expected: any),
+      value,
+    );
   } else if (expected && typeof expected === 'object') {
-    return toThrowMatchingErrorInstance(matcherName, error, expected);
+    return toThrowMatchingErrorInstance(matcherName, error, (expected: any));
   } else if (expected === undefined) {
     const pass = error !== undefined;
     return {
@@ -174,7 +184,7 @@ const printActualErrorMessage = error => {
       `Instead, it threw:\n` +
       RECEIVED_COLOR(
         '  ' +
-          highlightTrailingWhitespace(message, RECEIVED_BG) +
+          highlightTrailingWhitespace(message) +
           formatStackTrace(
             stack,
             {

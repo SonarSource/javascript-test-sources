@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  */
 
@@ -160,5 +159,28 @@ describe('Runtime', () => {
         expect(exports2.modulePath).toEqual('subdir2/__mocks__/my_module.js');
       });
     });
+
+    it('uses manual mocks when using a custom resolver', () => {
+      return createRuntime(__filename, {
+        // using the default resolver as a custom resolver
+        resolver: require.resolve('./defaultResolver.js'),
+      }).then(runtime => {
+        const exports = runtime.requireMock(
+          runtime.__mockRootPath,
+          './ManuallyMocked',
+        );
+
+        expect(exports.isManualMockModule).toBe(true);
+      });
+    });
+    it('provides `require.main` in mock', () =>
+      createRuntime(__filename).then(runtime => {
+        runtime._moduleRegistry[__filename] = module;
+        runtime.setMock(__filename, 'export_main', () => require.main, {
+          virtual: true,
+        });
+        const mainModule = runtime.requireMock(__filename, 'export_main');
+        expect(mainModule).toBe(module);
+      }));
   });
 });

@@ -1,9 +1,8 @@
 /**
- * Copyright (c) 2014, Facebook, Inc. All rights reserved.
+ * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -21,12 +20,19 @@ export const check = (argv: Argv) => {
     );
   }
 
-  if (argv.onlyChanged && argv.watchAll) {
-    throw new Error(
-      'Both --onlyChanged and --watchAll were specified, but these two ' +
-        'options do not make sense together. Try the --watch option which ' +
-        'reruns only tests related to changed files.',
-    );
+  for (const key of [
+    'onlyChanged',
+    'lastCommit',
+    'changedFilesWithAncestor',
+    'changedSince',
+  ]) {
+    if (argv[key] && argv.watchAll) {
+      throw new Error(
+        `Both --${key} and --watchAll were specified, but these two ` +
+          'options do not make sense together. Try the --watch option which ' +
+          'reruns only tests related to changed files.',
+      );
+    }
   }
 
   if (argv.findRelatedTests && argv._.length === 0) {
@@ -34,6 +40,14 @@ export const check = (argv: Argv) => {
       'The --findRelatedTests option requires file paths to be specified.\n' +
         'Example usage: jest --findRelatedTests ./src/source.js ' +
         './src/index.js.',
+    );
+  }
+
+  if (argv.hasOwnProperty('maxWorkers') && argv.maxWorkers === undefined) {
+    throw new Error(
+      'The --maxWorkers (-w) option requires a number to be specified.\n' +
+        'Example usage: jest --maxWorkers 2\n' +
+        'Or did you mean --watch?',
     );
   }
 
@@ -96,11 +110,19 @@ export const options = {
     type: 'string',
   },
   changedFilesWithAncestor: {
+    default: undefined,
     description:
-      'When used together with `--onlyChanged`, it runs tests ' +
-      'related to the current changes and the changes made in the last commit. ' +
-      '(NOTE: this only works for hg repos)',
+      'Runs tests related to the current changes and the changes made in the ' +
+      'last commit. Behaves similarly to `--onlyChanged`.',
     type: 'boolean',
+  },
+  changedSince: {
+    description:
+      'Runs tests related the changes since the provided branch. If the ' +
+      'current branch has diverged from the given branch, then only changes ' +
+      'made locally will be tested. Behaves similarly to `--onlyChanged`.',
+    nargs: 1,
+    type: 'string',
   },
   ci: {
     default: isCI,
@@ -108,6 +130,13 @@ export const options = {
       'Whether to run Jest in continuous integration (CI) mode. ' +
       'This option is on by default in most popular CI environments. It will ' +
       ' prevent snapshots from being written unless explicitly requested.',
+    type: 'boolean',
+  },
+  clearCache: {
+    default: undefined,
+    description:
+      'Clears the configured Jest cache directory and then exits. ' +
+      'Default directory can be found by calling jest --showConfig',
     type: 'boolean',
   },
   clearMocks: {
@@ -124,9 +153,9 @@ export const options = {
   },
   collectCoverageFrom: {
     description:
-      'relative to <rootDir> glob pattern matching the files ' +
+      'An array of glob patterns relative to <rootDir> matching the files ' +
       'that coverage info needs to be collected from.',
-    type: 'string',
+    type: 'array',
   },
   collectCoverageOnlyFrom: {
     description: 'Explicit list of paths coverage will be restricted to.',
@@ -188,6 +217,14 @@ export const options = {
     description: 'Print debugging info about your jest config.',
     type: 'boolean',
   },
+  detectLeaks: {
+    default: false,
+    description:
+      '**EXPERIMENTAL**: Detect memory leaks in tests. After executing a ' +
+      'test, it will try to garbage collect the global object used, and fail ' +
+      'if it was leaked',
+    type: 'boolean',
+  },
   env: {
     description:
       'The test environment used for all tests. This can point to ' +
@@ -217,6 +254,14 @@ export const options = {
       'adequately cleaned up.',
     type: 'boolean',
   },
+  globalSetup: {
+    description: 'The path to a module that runs before All Tests.',
+    type: 'string',
+  },
+  globalTeardown: {
+    description: 'The path to a module that runs after All Tests.',
+    type: 'string',
+  },
   globals: {
     description:
       'A JSON string with map of global variables that need ' +
@@ -238,8 +283,8 @@ export const options = {
   lastCommit: {
     default: undefined,
     description:
-      'Will run all tests affected by file changes in the last ' +
-      'commit made.',
+      'Run all tests affected by file changes in the last commit made. ' +
+      'Behaves similarly to `--onlyChanged`.',
     type: 'boolean',
   },
   listTests: {
@@ -262,7 +307,7 @@ export const options = {
     default: undefined,
     description:
       'Maps code coverage reports against original source code ' +
-      'when transformers supply source maps.',
+      'when transformers supply source maps.\n\nDEPRECATED',
     type: 'boolean',
   },
   maxWorkers: {
@@ -318,13 +363,24 @@ export const options = {
     description: 'Activates notifications for test results.',
     type: 'boolean',
   },
+  notifyMode: {
+    default: 'always',
+    description: 'Specifies when notifications will appear for test results.',
+    type: 'string',
+  },
   onlyChanged: {
     alias: 'o',
     default: undefined,
     description:
       'Attempts to identify which tests to run based on which ' +
       "files have changed in the current repository. Only works if you're " +
-      'running tests in a git repository at the moment.',
+      'running tests in a git or hg repository at the moment.',
+    type: 'boolean',
+  },
+  onlyFailures: {
+    alias: 'f',
+    default: undefined,
+    description: 'Run tests that failed in the previous execution.',
     type: 'boolean',
   },
   outputFile: {
@@ -332,6 +388,12 @@ export const options = {
       'Write test results to a file when the --json option is ' +
       'also specified.',
     type: 'string',
+  },
+  passWithNoTests: {
+    default: false,
+    description:
+      'Will not fail if no tests are found (for example while using `--testPathPattern`.)',
+    type: 'boolean',
   },
   preset: {
     description: "A preset that is used as a base for Jest's configuration.",
@@ -364,6 +426,13 @@ export const options = {
   resolver: {
     description: 'A JSON string which allows the use of a custom resolver.',
     type: 'string',
+  },
+  restoreMocks: {
+    default: undefined,
+    description:
+      'Automatically restore mock state and implementation between every test. ' +
+      'Equivalent to calling jest.restoreAllMocks() between each test.',
+    type: 'boolean',
   },
   rootDir: {
     description:
@@ -431,6 +500,11 @@ export const options = {
     description: 'Exit code of `jest` command if the test run failed',
     type: 'string', // number
   },
+  testLocationInResults: {
+    default: false,
+    description: 'Add `location` information to the test results',
+    type: 'boolean',
+  },
   testMatch: {
     description: 'The glob patterns Jest uses to detect test files.',
     type: 'array',
@@ -451,7 +525,7 @@ export const options = {
     description:
       'A regexp pattern string that is matched against all tests ' +
       'paths before executing the test.',
-    type: 'string',
+    type: 'array',
   },
   testRegex: {
     description: 'The regexp pattern Jest uses to detect test files.',

@@ -1,21 +1,21 @@
 /**
-* Copyright (c) 2014, Facebook, Inc. All rights reserved.
-*
-* This source code is licensed under the BSD-style license found in the
-* LICENSE file in the root directory of this source tree. An additional grant
-* of patent rights can be found in the PATENTS file in the same directory.
-*
-* @flow
-*/
+ * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ *
+ * @flow
+ */
 
 import type {Argv} from 'types/Argv';
 import type {EnvironmentClass} from 'types/Environment';
 
+import chalk from 'chalk';
 import os from 'os';
 import path from 'path';
-import chalk from 'chalk';
 import yargs from 'yargs';
-import {Console, setGlobal, validateCLIOptions} from 'jest-util';
+import {Console, setGlobal} from 'jest-util';
+import {validateCLIOptions} from 'jest-validate';
 import {readConfig} from 'jest-config';
 // eslint-disable-next-line import/default
 import Runtime from '../';
@@ -24,6 +24,10 @@ import * as args from './args';
 const VERSION = (require('../../package.json').version: string);
 
 export function run(cliArgv?: Argv, cliInfo?: Array<string>) {
+  const realFs = require('fs');
+  const fs = require('graceful-fs');
+  fs.gracefulify(realFs);
+
   let argv;
   if (cliArgv) {
     argv = cliArgv;
@@ -39,7 +43,7 @@ export function run(cliArgv?: Argv, cliInfo?: Array<string>) {
 
   if (argv.help) {
     yargs.showHelp();
-    process.on('exit', () => process.exit(1));
+    process.on('exit', () => (process.exitCode = 1));
     return;
   }
 
@@ -50,7 +54,7 @@ export function run(cliArgv?: Argv, cliInfo?: Array<string>) {
 
   if (!argv._.length) {
     console.log('Please provide a path to a script. (See --help for details)');
-    process.on('exit', () => process.exit(1));
+    process.on('exit', () => (process.exitCode = 1));
     return;
   }
 
@@ -89,6 +93,6 @@ export function run(cliArgv?: Argv, cliInfo?: Array<string>) {
     })
     .catch(e => {
       console.error(chalk.red(e.stack || e));
-      process.on('exit', () => process.exit(1));
+      process.on('exit', () => (process.exitCode = 1));
     });
 }

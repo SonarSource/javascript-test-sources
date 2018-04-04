@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -16,6 +15,8 @@ import type {TestResult} from 'types/TestResult';
 import type Runtime from 'jest-runtime';
 
 import path from 'path';
+import fs from 'graceful-fs';
+import {getCallsite} from 'jest-util';
 import JasmineReporter from './reporter';
 import {install as jasmineAsyncInstall} from './jasmine_async';
 
@@ -35,12 +36,29 @@ async function jasmine2(
     testPath,
   );
   const jasmineFactory = runtime.requireInternalModule(JASMINE);
-  const jasmine = jasmineFactory.create();
+  const jasmine = jasmineFactory.create({
+    process,
+    testPath,
+  });
 
   const env = jasmine.getEnv();
   const jasmineInterface = jasmineFactory.interface(jasmine, env);
   Object.assign(environment.global, jasmineInterface);
   env.addReporter(jasmineInterface.jsApiReporter);
+
+  // TODO: Remove config option if V8 exposes some way of getting location of caller
+  // in a future version
+  if (config.testLocationInResults === true) {
+    const originalIt = environment.global.it;
+    environment.global.it = (...args) => {
+      const stack = getCallsite(1, runtime.getSourceMaps());
+      const it = originalIt(...args);
+
+      it.result.__callsite = stack;
+
+      return it;
+    };
+  }
 
   jasmineAsyncInstall(environment.global);
 
@@ -71,6 +89,10 @@ async function jasmine2(
         environment.fakeTimers.useFakeTimers();
       }
     }
+
+    if (config.restoreMocks) {
+      runtime.restoreAllMocks();
+    }
   });
 
   env.addReporter(reporter);
@@ -94,7 +116,38 @@ async function jasmine2(
     runtime.requireModule(config.setupTestFrameworkScriptFile);
   }
 
-  if (globalConfig.testNamePattern) {
+  runtime
+    .requireInternalModule(
+      require.resolve('source-map-support'),
+      'source-map-support',
+    )
+    .install({
+      environment: 'node',
+      handleUncaughtExceptions: false,
+      retrieveSourceMap: source => {
+        const sourceMaps = runtime.getSourceMaps();
+        const sourceMapSource = sourceMaps && sourceMaps[source];
+
+        if (sourceMapSource) {
+          try {
+            return {
+              map: JSON.parse(fs.readFileSync(sourceMapSource)),
+              url: source,
+            };
+          } catch (e) {}
+        }
+        return null;
+      },
+    });
+
+  if (globalConfig.enabledTestsMap) {
+    env.specFilter = spec => {
+      const suiteMap =
+        globalConfig.enabledTestsMap &&
+        globalConfig.enabledTestsMap[spec.result.testPath];
+      return suiteMap && suiteMap[spec.result.fullName];
+    };
+  } else if (globalConfig.testNamePattern) {
     const testNameRegex = new RegExp(globalConfig.testNamePattern, 'i');
     env.specFilter = spec => testNameRegex.test(spec.getFullName());
   }
@@ -116,6 +169,8 @@ const addSnapshotData = (results, snapshotState) => {
   });
 
   const uncheckedCount = snapshotState.getUncheckedCount();
+  const uncheckedKeys = snapshotState.getUncheckedKeys();
+
   if (uncheckedCount) {
     snapshotState.removeUncheckedKeys();
   }
@@ -127,6 +182,9 @@ const addSnapshotData = (results, snapshotState) => {
   results.snapshot.unmatched = snapshotState.unmatched;
   results.snapshot.updated = snapshotState.updated;
   results.snapshot.unchecked = !status.deleted ? uncheckedCount : 0;
+  // Copy the array to prevent memory leaks
+  results.snapshot.uncheckedKeys = Array.from(uncheckedKeys);
+
   return results;
 };
 

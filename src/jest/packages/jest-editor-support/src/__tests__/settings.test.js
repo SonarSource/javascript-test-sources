@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -22,12 +21,14 @@ describe('Settings', () => {
       'test',
       1000,
     );
-    const settings = new Settings(workspace);
+    const options = {shell: true};
+    const settings = new Settings(workspace, options);
     expect(settings.workspace).toEqual(workspace);
     expect(settings.settings).toEqual(expect.any(Object));
+    expect(settings.spawnOptions).toEqual(options);
   });
 
-  it('reads and parses the config', () => {
+  it('[jest 20] reads and parses the config', () => {
     const workspace = new ProjectWorkspace(
       'root_path',
       'path_to_jest',
@@ -56,6 +57,64 @@ describe('Settings', () => {
     expect(settings.settings).toEqual(config);
   });
 
+  it('[jest 21] reads and parses the config', () => {
+    const workspace = new ProjectWorkspace(
+      'root_path',
+      'path_to_jest',
+      'test',
+      1000,
+    );
+    const completed = jest.fn();
+    const configs = [{cacheDirectory: '/tmp/jest', name: '[md5 hash]'}];
+    const json = {
+      configs,
+      version: '21.0.0',
+    };
+
+    const mockProcess: any = new EventEmitter();
+    mockProcess.stdout = new EventEmitter();
+    const createProcess = () => mockProcess;
+    const buffer = makeBuffer(JSON.stringify(json));
+    const settings = new Settings(workspace, {createProcess});
+
+    settings.getConfig(completed);
+    settings.getConfigProcess.stdout.emit('data', buffer);
+    settings.getConfigProcess.emit('close');
+
+    expect(completed).toHaveBeenCalled();
+    expect(settings.jestVersionMajor).toBe(21);
+    expect(settings.settings).toEqual(configs[0]);
+  });
+
+  it('[jest 21] reads and parses the configs', () => {
+    const workspace = new ProjectWorkspace(
+      'root_path',
+      'path_to_jest',
+      'test',
+      1000,
+    );
+    const completed = jest.fn();
+    const configs = [{cacheDirectory: '/tmp/jest', name: '[md5 hash]'}];
+    const json = {
+      configs,
+      version: '21.0.0',
+    };
+
+    const mockProcess: any = new EventEmitter();
+    mockProcess.stdout = new EventEmitter();
+    const createProcess = () => mockProcess;
+    const buffer = makeBuffer(JSON.stringify(json));
+    const settings = new Settings(workspace, {createProcess});
+
+    settings.getConfigs(completed);
+    settings.getConfigProcess.stdout.emit('data', buffer);
+    settings.getConfigProcess.emit('close');
+
+    expect(completed).toHaveBeenCalled();
+    expect(settings.jestVersionMajor).toBe(21);
+    expect(settings.configs).toEqual(configs);
+  });
+
   it('calls callback even if no data is sent', () => {
     const workspace = new ProjectWorkspace(
       'root_path',
@@ -74,6 +133,42 @@ describe('Settings', () => {
     settings.getConfigProcess.emit('close');
 
     expect(completed).toHaveBeenCalled();
+  });
+
+  it('passes command, args, and options to createProcess', () => {
+    const localJestMajorVersion = 1000;
+    const pathToConfig = 'test';
+    const pathToJest = 'path_to_jest';
+    const rootPath = 'root_path';
+
+    const workspace = new ProjectWorkspace(
+      rootPath,
+      pathToJest,
+      pathToConfig,
+      localJestMajorVersion,
+    );
+    const createProcess = jest.fn().mockReturnValue({
+      on: () => {},
+      stdout: new EventEmitter(),
+    });
+
+    const options: any = {
+      createProcess,
+      shell: true,
+    };
+    const settings = new Settings(workspace, options);
+    settings.getConfig(() => {});
+
+    expect(createProcess).toBeCalledWith(
+      {
+        localJestMajorVersion,
+        pathToConfig,
+        pathToJest,
+        rootPath,
+      },
+      ['--showConfig'],
+      {shell: true},
+    );
   });
 });
 

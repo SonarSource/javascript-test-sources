@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  */
 // This file is a heavily modified fork of Jasmine. Original license:
@@ -43,8 +42,8 @@ import SpyRegistry from './spy_registry';
 import Suite from './Suite';
 import Timer from './Timer';
 
-export const create = function() {
-  const j$ = {};
+exports.create = function(createOptions: Object) {
+  const j$ = Object.assign({}, createOptions);
 
   j$.DEFAULT_TIMEOUT_INTERVAL = 5000;
 
@@ -117,8 +116,8 @@ exports.interface = function(jasmine: Jasmine, env: any) {
       return env.fail.apply(env, arguments);
     },
 
-    spyOn(obj: Object, methodName: string) {
-      return env.spyOn(obj, methodName);
+    spyOn(obj: Object, methodName: string, accessType?: string) {
+      return env.spyOn(obj, methodName, accessType);
     },
 
     jsApiReporter: new jasmine.JsApiReporter({

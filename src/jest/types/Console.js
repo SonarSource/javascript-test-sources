@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -14,5 +13,19 @@ export type LogEntry = {|
   origin: string,
   type: LogType,
 |};
-export type LogType = 'log' | 'info' | 'warn' | 'error';
+export type LogCounters = {[label: string]: number};
+export type LogTimers = {[label: string]: Date};
+export type LogType =
+  | 'assert'
+  | 'count'
+  | 'debug'
+  | 'dir'
+  | 'dirxml'
+  | 'error'
+  | 'group'
+  | 'groupCollapsed'
+  | 'info'
+  | 'log'
+  | 'time'
+  | 'warn';
 export type ConsoleBuffer = Array<LogEntry>;

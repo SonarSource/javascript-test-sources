@@ -1,9 +1,8 @@
 /**
- * Copyright (c) 2014, Facebook, Inc. All rights reserved.
+ * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -11,10 +10,30 @@
 import type {Glob, Path} from 'types/Config';
 import type {AssertionResult, TestResult} from 'types/TestResult';
 
+import fs from 'fs';
 import path from 'path';
 import chalk from 'chalk';
 import micromatch from 'micromatch';
 import slash from 'slash';
+import {codeFrameColumns} from '@babel/code-frame';
+import StackUtils from 'stack-utils';
+
+// stack utils tries to create pretty stack by making paths relative.
+const stackUtils = new StackUtils({
+  cwd: 'something which does not exist',
+});
+
+let nodeInternals = [];
+
+try {
+  nodeInternals = StackUtils.nodeInternals()
+    // this is to have the tests be the same in node 4 and node 6.
+    // TODO: Remove when we drop support for node 4
+    .concat(new RegExp('internal/process/next_tick.js'));
+} catch (e) {
+  // `StackUtils.nodeInternals()` fails in browsers. We don't need to remove
+  // node internals in the browser though, so no issue.
+}
 
 type StackTraceConfig = {
   rootDir: string,
@@ -25,9 +44,16 @@ type StackTraceOptions = {
   noStackTrace: boolean,
 };
 
+const PATH_NODE_MODULES = `${path.sep}node_modules${path.sep}`;
+const PATH_JEST_PACKAGES = `${path.sep}jest${path.sep}packages${path.sep}`;
+
 // filter for noisy stack trace lines
 const JASMINE_IGNORE = /^\s+at(?:(?:.*?vendor\/|jasmine\-)|\s+jasmine\.buildExpectationResult)/;
-const STACK_TRACE_IGNORE = /^\s+at.*?jest(-.*?)?(\/|\\)(build|node_modules|packages)(\/|\\)/;
+const JEST_INTERNALS_IGNORE = /^\s+at.*?jest(-.*?)?(\/|\\)(build|node_modules|packages)(\/|\\)/;
+const ANONYMOUS_FN_IGNORE = /^\s+at <anonymous>.*$/;
+const ANONYMOUS_PROMISE_IGNORE = /^\s+at (new )?Promise \(<anonymous>\).*$/;
+const ANONYMOUS_GENERATOR_IGNORE = /^\s+at Generator.next \(<anonymous>\).*$/;
+const NATIVE_NEXT_IGNORE = /^\s+at next \(native\).*$/;
 const TITLE_INDENT = '  ';
 const MESSAGE_INDENT = '    ';
 const STACK_INDENT = '      ';
@@ -38,7 +64,7 @@ const STACK_PATH_REGEXP = /\s*at.*\(?(\:\d*\:\d*|native)\)?/;
 const EXEC_ERROR_MESSAGE = 'Test suite failed to run';
 const ERROR_TEXT = 'Error: ';
 
-const trim = string => (string || '').replace(/^\s+/, '').replace(/\s+$/, '');
+const trim = string => (string || '').trim();
 
 // Some errors contain not only line numbers in stack traces
 // e.g. SyntaxErrors can contain snippets of code, and we don't
@@ -46,6 +72,22 @@ const trim = string => (string || '').replace(/^\s+/, '').replace(/\s+$/, '');
 // which will get misaligned.
 const trimPaths = string =>
   string.match(STACK_PATH_REGEXP) ? trim(string) : string;
+
+const getRenderedCallsite = (fileContent: string, line: number) => {
+  let renderedCallsite = codeFrameColumns(
+    fileContent,
+    {start: {line}},
+    {highlightCode: true},
+  );
+
+  renderedCallsite = renderedCallsite
+    .split('\n')
+    .map(line => MESSAGE_INDENT + line)
+    .join('\n');
+
+  renderedCallsite = `\n${renderedCallsite}\n`;
+  return renderedCallsite;
+};
 
 // ExecError is an error thrown outside of the test suite (not inside an `it` or
 // `before/after each` hooks). If it's thrown, none of the tests in the file
@@ -107,10 +149,30 @@ const removeInternalStackEntries = (lines, options: StackTraceOptions) => {
   let pathCounter = 0;
 
   return lines.filter(line => {
-    const isPath = STACK_PATH_REGEXP.test(line);
-    if (!isPath) {
+    if (ANONYMOUS_FN_IGNORE.test(line)) {
+      return false;
+    }
+
+    if (ANONYMOUS_PROMISE_IGNORE.test(line)) {
+      return false;
+    }
+
+    if (ANONYMOUS_GENERATOR_IGNORE.test(line)) {
+      return false;
+    }
+
+    if (NATIVE_NEXT_IGNORE.test(line)) {
+      return false;
+    }
+
+    if (nodeInternals.some(internal => internal.test(line))) {
+      return false;
+    }
+
+    if (!STACK_PATH_REGEXP.test(line)) {
       return true;
     }
+
     if (JASMINE_IGNORE.test(line)) {
       return false;
     }
@@ -119,7 +181,15 @@ const removeInternalStackEntries = (lines, options: StackTraceOptions) => {
       return true; // always keep the first line even if it's from Jest
     }
 
-    return !(STACK_TRACE_IGNORE.test(line) || options.noStackTrace);
+    if (options.noStackTrace) {
+      return false;
+    }
+
+    if (JEST_INTERNALS_IGNORE.test(line)) {
+      return false;
+    }
+
+    return true;
   });
 };
 
@@ -148,6 +218,22 @@ const formatPaths = (
   return STACK_TRACE_COLOR(match[1]) + filePath + STACK_TRACE_COLOR(match[3]);
 };
 
+const getTopFrame = (lines: string[]) => {
+  for (const line of lines) {
+    if (line.includes(PATH_NODE_MODULES) || line.includes(PATH_JEST_PACKAGES)) {
+      continue;
+    }
+
+    const parsedFrame = stackUtils.parseLine(line.trim());
+
+    if (parsedFrame && parsedFrame.file) {
+      return parsedFrame;
+    }
+  }
+
+  return null;
+};
+
 export const formatStackTrace = (
   stack: string,
   config: StackTraceConfig,
@@ -155,15 +241,39 @@ export const formatStackTrace = (
   testPath: ?Path,
 ) => {
   let lines = stack.split(/\n/);
+  let renderedCallsite = '';
   const relativeTestPath = testPath
     ? slash(path.relative(config.rootDir, testPath))
     : null;
   lines = removeInternalStackEntries(lines, options);
-  return lines
-    .map(trimPaths)
-    .map(formatPaths.bind(null, config, options, relativeTestPath))
-    .map(line => STACK_INDENT + line)
+
+  const topFrame = getTopFrame(lines);
+
+  if (topFrame) {
+    const filename = topFrame.file;
+
+    if (path.isAbsolute(filename)) {
+      let fileContent;
+      try {
+        // TODO: check & read HasteFS instead of reading the filesystem:
+        // see: https://github.com/facebook/jest/pull/5405#discussion_r164281696
+        fileContent = fs.readFileSync(filename, 'utf8');
+        renderedCallsite = getRenderedCallsite(fileContent, topFrame.line);
+      } catch (e) {
+        // the file does not exist or is inaccessible, we ignore
+      }
+    }
+  }
+
+  const stacktrace = lines
+    .map(
+      line =>
+        STACK_INDENT +
+        formatPaths(config, options, relativeTestPath, trimPaths(line)),
+    )
     .join('\n');
+
+  return renderedCallsite + stacktrace;
 };
 
 export const formatResultsErrors = (

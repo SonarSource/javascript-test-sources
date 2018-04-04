@@ -1,14 +1,13 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
 
-import type {Path} from 'types/Config';
+import type {Path, Glob} from 'types/Config';
 
 import path from 'path';
 import {ValidationError} from 'jest-validate';
@@ -31,7 +30,7 @@ const createValidationError = (message: string) => {
 
 export const resolve = (rootDir: string, key: string, filePath: Path) => {
   const module = Resolver.findNodeModule(
-    _replaceRootDirInPath(rootDir, filePath),
+    replaceRootDirInPath(rootDir, filePath),
     {
       basedir: rootDir,
     },
@@ -41,14 +40,19 @@ export const resolve = (rootDir: string, key: string, filePath: Path) => {
     throw createValidationError(
       `  Module ${chalk.bold(filePath)} in the ${chalk.bold(
         key,
-      )} option was not found.`,
+      )} option was not found.
+         ${chalk.bold('<rootDir>')} is: ${rootDir}`,
     );
   }
 
   return module;
 };
 
-export const _replaceRootDirInPath = (
+export const escapeGlobCharacters = (path: Path): Glob => {
+  return path.replace(/([()*{}\[\]!?\\])/g, '\\$1');
+};
+
+export const replaceRootDirInPath = (
   rootDir: string,
   filePath: Path,
 ): string => {
@@ -87,7 +91,7 @@ export const _replaceRootDirTags = (rootDir: string, config: any) => {
       }
       return _replaceRootDirInObject(rootDir, config);
     case 'string':
-      return _replaceRootDirInPath(rootDir, config);
+      return replaceRootDirInPath(rootDir, config);
   }
   return config;
 };
@@ -101,7 +105,7 @@ export const _replaceRootDirTags = (rootDir: string, config: any) => {
  * 1. looks for <name> relative to Jest.
  */
 export const getTestEnvironment = (config: Object) => {
-  const env = config.testEnvironment;
+  const env = replaceRootDirInPath(config.rootDir, config.testEnvironment);
   let module = Resolver.findNodeModule(`jest-environment-${env}`, {
     basedir: config.rootDir,
   });

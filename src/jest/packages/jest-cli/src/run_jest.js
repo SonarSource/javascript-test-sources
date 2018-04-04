@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -14,14 +13,19 @@ import type {GlobalConfig} from 'types/Config';
 import type {AggregatedResult} from 'types/TestResult';
 import type TestWatcher from './test_watcher';
 
+import micromatch from 'micromatch';
+import chalk from 'chalk';
 import path from 'path';
 import {Console, formatTestResults} from 'jest-util';
+import exit from 'exit';
 import fs from 'graceful-fs';
 import getNoTestsFoundMessage from './get_no_test_found_message';
 import SearchSource from './search_source';
 import TestScheduler from './test_scheduler';
 import TestSequencer from './test_sequencer';
 import {makeEmptyAggregatedTestResult} from './test_result_helpers';
+import FailedTestsCache from './failed_tests_cache';
+import JestHooks, {type JestHookEmitter} from './jest_hooks';
 
 const setConfig = (contexts, newConfig) =>
   contexts.forEach(
@@ -36,24 +40,31 @@ const getTestPaths = async (
   context,
   outputStream,
   changedFilesPromise,
+  jestHooks,
 ) => {
   const source = new SearchSource(context);
-  let data = await source.getTestPaths(globalConfig, changedFilesPromise);
+  const data = await source.getTestPaths(globalConfig, changedFilesPromise);
 
   if (!data.tests.length && globalConfig.onlyChanged && data.noSCM) {
-    if (globalConfig.watch) {
-      data = await source.getTestPaths(globalConfig);
-    } else {
-      new Console(outputStream, outputStream).log(
-        'Jest can only find uncommitted changed files in a git or hg ' +
-          'repository. If you make your project a git or hg ' +
-          'repository (`git init` or `hg init`), Jest will be able ' +
-          'to only run tests related to files changed since the last ' +
-          'commit.',
-      );
-    }
+    new Console(outputStream, outputStream).log(
+      'Jest can only find uncommitted changed files in a git or hg ' +
+        'repository. If you make your project a git or hg ' +
+        'repository (`git init` or `hg init`), Jest will be able ' +
+        'to only run tests related to files changed since the last ' +
+        'commit.',
+    );
   }
-  return data;
+
+  const shouldTestArray = await Promise.all(
+    data.tests.map(test => jestHooks.shouldRunTestSuite(test.path)),
+  );
+
+  const filteredTests = data.tests.filter((test, i) => shouldTestArray[i]);
+
+  return Object.assign({}, data, {
+    allTests: filteredTests.length,
+    tests: filteredTests,
+  });
 };
 
 const processResults = (runResults, options) => {
@@ -67,7 +78,7 @@ const processResults = (runResults, options) => {
       const filePath = path.resolve(process.cwd(), outputFile);
 
       fs.writeFileSync(filePath, JSON.stringify(formatTestResults(runResults)));
-      process.stdout.write(
+      options.outputStream.write(
         `Test results written to: ` +
           `${path.relative(process.cwd(), filePath)}\n`,
       );
@@ -78,25 +89,51 @@ const processResults = (runResults, options) => {
   return options.onComplete && options.onComplete(runResults);
 };
 
-export default async function runJest({
+const testSchedulerContext = {
+  firstRun: true,
+  previousSuccess: true,
+};
+
+export default (async function runJest({
   contexts,
   globalConfig,
   outputStream,
   testWatcher,
+  jestHooks = new JestHooks().getEmitter(),
   startRun,
   changedFilesPromise,
   onComplete,
+  failedTestsCache,
 }: {
   globalConfig: GlobalConfig,
   contexts: Array<Context>,
   outputStream: stream$Writable | tty$WriteStream,
   testWatcher: TestWatcher,
+  jestHooks?: JestHookEmitter,
   startRun: (globalConfig: GlobalConfig) => *,
   changedFilesPromise: ?ChangedFilesPromise,
   onComplete: (testResults: AggregatedResult) => any,
+  failedTestsCache: ?FailedTestsCache,
 }) {
   const sequencer = new TestSequencer();
   let allTests = [];
+
+  if (changedFilesPromise && globalConfig.watch) {
+    const {repos} = await changedFilesPromise;
+    const noSCM = Object.keys(repos).every(scm => repos[scm].size === 0);
+    if (noSCM) {
+      process.stderr.write(
+        '\n' +
+          chalk.bold('--watch') +
+          ' is not supported without git/hg, please use --watchAll ' +
+          '\n',
+      );
+      exit(1);
+    }
+  }
+
+  let collectCoverageFrom = [];
+
   const testRunData = await Promise.all(
     contexts.map(async context => {
       const matches = await getTestPaths(
@@ -104,16 +141,51 @@ export default async function runJest({
         context,
         outputStream,
         changedFilesPromise,
+        jestHooks,
       );
       allTests = allTests.concat(matches.tests);
+
+      if (matches.collectCoverageFrom) {
+        collectCoverageFrom = collectCoverageFrom.concat(
+          matches.collectCoverageFrom.filter(filename => {
+            if (
+              globalConfig.collectCoverageFrom &&
+              !micromatch(
+                [path.relative(globalConfig.rootDir, filename)],
+                globalConfig.collectCoverageFrom,
+              ).length
+            ) {
+              return false;
+            }
+
+            if (
+              globalConfig.coveragePathIgnorePatterns &&
+              globalConfig.coveragePathIgnorePatterns.some(pattern =>
+                filename.match(pattern),
+              )
+            ) {
+              return false;
+            }
+
+            return true;
+          }),
+        );
+      }
+
       return {context, matches};
     }),
   );
 
+  if (collectCoverageFrom.length) {
+    globalConfig = Object.freeze(
+      Object.assign({}, globalConfig, {collectCoverageFrom}),
+    );
+  }
+
   allTests = sequencer.sort(allTests);
 
   if (globalConfig.listTests) {
-    const testsPaths = allTests.map(test => test.path);
+    const testsPaths = Array.from(new Set(allTests.map(test => test.path)));
     if (globalConfig.json) {
       console.log(JSON.stringify(testsPaths));
     } else {
@@ -124,10 +196,29 @@ export default async function runJest({
     return null;
   }
 
+  if (globalConfig.onlyFailures && failedTestsCache) {
+    allTests = failedTestsCache.filterTests(allTests);
+    globalConfig = failedTestsCache.updateConfig(globalConfig);
+  }
+
   if (!allTests.length) {
-    new Console(outputStream, outputStream).log(
-      getNoTestsFoundMessage(testRunData, globalConfig),
+    const noTestsFoundMessage = getNoTestsFoundMessage(
+      testRunData,
+      globalConfig,
     );
+
+    if (
+      globalConfig.passWithNoTests ||
+      globalConfig.findRelatedTests ||
+      globalConfig.lastCommit ||
+      globalConfig.onlyChanged
+    ) {
+      new Console(outputStream, outputStream).log(noTestsFoundMessage);
+    } else {
+      new Console(outputStream, outputStream).error(noTestsFoundMessage);
+
+      exit(1);
+    }
   } else if (
     allTests.length === 1 &&
     globalConfig.silent !== true &&
@@ -146,17 +237,47 @@ export default async function runJest({
   // original value of rootDir. Instead, use the {cwd: Path} property to resolve
   // paths when printing.
   setConfig(contexts, {cwd: process.cwd()});
+  if (globalConfig.globalSetup) {
+    // $FlowFixMe
+    const globalSetup = require(globalConfig.globalSetup);
+    if (typeof globalSetup !== 'function') {
+      throw new TypeError(
+        `globalSetup file must export a function at ${
+          globalConfig.globalSetup
+        }`,
+      );
+    }
 
-  const results = await new TestScheduler(globalConfig, {
-    startRun,
-  }).scheduleTests(allTests, testWatcher);
+    await globalSetup();
+  }
+  const results = await new TestScheduler(
+    globalConfig,
+    {
+      startRun,
+    },
+    testSchedulerContext,
+  ).scheduleTests(allTests, testWatcher);
 
   sequencer.cacheResults(allTests, results);
 
+  if (globalConfig.globalTeardown) {
+    // $FlowFixMe
+    const globalTeardown = require(globalConfig.globalTeardown);
+    if (typeof globalTeardown !== 'function') {
+      throw new TypeError(
+        `globalTeardown file must export a function at ${
+          globalConfig.globalTeardown
+        }`,
+      );
+    }
+
+    await globalTeardown();
+  }
   return processResults(results, {
     isJSON: globalConfig.json,
     onComplete,
     outputFile: globalConfig.outputFile,
+    outputStream,
     testResultsProcessor: globalConfig.testResultsProcessor,
   });
-}
+});

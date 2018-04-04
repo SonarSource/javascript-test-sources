@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -12,25 +11,24 @@ import type {GlobalConfig, Path, ProjectConfig} from 'types/Config';
 import type {SerializableError, TestResult} from 'types/TestResult';
 import type {RawModuleMap} from 'types/HasteMap';
 
-// Make sure uncaught errors are logged before we exit.
-process.on('uncaughtException', err => {
-  console.error(err.stack);
-  process.exit(1);
-});
-
+import exit from 'exit';
 import HasteMap from 'jest-haste-map';
 import {separateMessageFromStack} from 'jest-message-util';
 import Runtime from 'jest-runtime';
 import runTest from './run_test';
 
-type WorkerData = {|
+export type WorkerData = {|
   config: ProjectConfig,
   globalConfig: GlobalConfig,
   path: Path,
-  rawModuleMap?: RawModuleMap,
+  rawModuleMap: ?RawModuleMap,
 |};
 
-type WorkerCallback = (error: ?SerializableError, result?: TestResult) => void;
+// Make sure uncaught errors are logged before we exit.
+process.on('uncaughtException', err => {
+  console.error(err.stack);
+  exit(1);
+});
 
 const formatError = (error: string | Error): SerializableError => {
   if (typeof error === 'string') {
@@ -70,33 +68,20 @@ const getResolver = (config, rawModuleMap) => {
   }
 };
 
-// Cannot be ESM export because of worker-farm
-module.exports = (
-  {config, globalConfig, path, rawModuleMap}: WorkerData,
-  callback: WorkerCallback,
-) => {
-  let parentExited = false;
-  const disconnectCallback = () => (parentExited = true);
-  const removeListener = () =>
-    process.removeListener('disconnect', disconnectCallback);
-  process.on('disconnect', disconnectCallback);
-
+export async function worker({
+  config,
+  globalConfig,
+  path,
+  rawModuleMap,
+}: WorkerData): Promise<TestResult> {
   try {
-    runTest(path, globalConfig, config, getResolver(config, rawModuleMap)).then(
-      result => {
-        removeListener();
-        if (!parentExited) {
-          callback(null, result);
-        }
-      },
-      error => {
-        removeListener();
-        if (!parentExited) {
-          callback(formatError(error));
-        }
-      },
+    return await runTest(
+      path,
+      globalConfig,
+      config,
+      getResolver(config, rawModuleMap),
     );
   } catch (error) {
-    callback(formatError(error));
+    throw formatError(error);
   }
-};
+}

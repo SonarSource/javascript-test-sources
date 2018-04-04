@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -19,6 +18,7 @@ export type Argv = {|
   cache: boolean,
   cacheDirectory: string,
   changedFilesWithAncestor: boolean,
+  changedSince: string,
   clearMocks: boolean,
   ci: boolean,
   collectCoverage: boolean,
@@ -34,6 +34,8 @@ export type Argv = {|
   expand: boolean,
   findRelatedTests: boolean,
   forceExit: boolean,
+  globalSetup: ?string,
+  globalTeardown: ?string,
   globals: string,
   h: boolean,
   haste: string,
@@ -41,7 +43,6 @@ export type Argv = {|
   json: boolean,
   lastCommit: boolean,
   logHeapUsage: boolean,
-  mapCoverage: boolean,
   moduleDirectories: Array<string>,
   moduleFileExtensions: Array<string>,
   moduleLoader: string,
@@ -52,6 +53,7 @@ export type Argv = {|
   noSCM: boolean,
   noStackTrace: boolean,
   notify: boolean,
+  notifyMode: string,
   onlyChanged: boolean,
   outputFile: string,
   preset: ?string,
@@ -59,6 +61,7 @@ export type Argv = {|
   resetMocks: boolean,
   resetModules: boolean,
   resolver: ?string,
+  restoreMocks: boolean,
   rootDir: string,
   roots: Array<string>,
   setupFiles: Array<string>,
@@ -70,7 +73,7 @@ export type Argv = {|
   testMatch: Array<string>,
   testNamePattern: string,
   testPathIgnorePatterns: Array<string>,
-  testPathPattern: string,
+  testPathPattern: Array<string>,
   testRegex: string,
   testResultsProcessor: ?string,
   testRunner: string,

@@ -1,33 +1,31 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
 
-import type {SerializableError} from 'types/TestResult';
 import type {InternalHasteMap, ModuleMetaData} from 'types/HasteMap';
 
 export type IgnoreMatcher = (item: string) => boolean;
 
 export type WorkerMessage = {
+  computeSha1: boolean,
   filePath: string,
   hasteImplModulePath?: string,
 };
-export type WorkerMetadata = {
+
+export type WorkerMetadata = {|
+  dependencies: ?Array<string>,
   id: ?string,
   module: ?ModuleMetaData,
-  dependencies: ?Array<string>,
-};
-export type WorkerCallback = (
-  error: ?SerializableError,
-  metaData: ?WorkerMetadata,
-) => void;
+  sha1: ?string,
+|};
 
 export type CrawlerOptions = {|
+  computeSha1: boolean,
   data: InternalHasteMap,
   extensions: Array<string>,
   forceNodeFilesystemAPI: boolean,

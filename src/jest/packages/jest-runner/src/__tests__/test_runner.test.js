@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  */
 
@@ -12,17 +11,17 @@
 const TestRunner = require('../index');
 const {TestWatcher} = require('jest-cli');
 
-let workerFarmMock;
+let mockWorkerFarm;
 
-jest.mock('worker-farm', () => {
-  const mock = jest.fn(
-    (options, worker) =>
-      (workerFarmMock = jest.fn((data, callback) =>
-        require(worker)(data, callback),
-      )),
-  );
-  mock.end = jest.fn();
-  return mock;
+jest.mock('jest-worker', () => {
+  return jest.fn(worker => {
+    return (mockWorkerFarm = {
+      end: jest.fn(),
+      getStderr: jest.fn(),
+      getStdout: jest.fn(),
+      worker: jest.fn((data, callback) => require(worker)(data, callback)),
+    });
+  });
 });
 
 jest.mock('../test_worker', () => {});
@@ -45,15 +44,9 @@ test('injects the rawModuleMap into each worker in watch mode', () => {
       {serial: false},
     )
     .then(() => {
-      expect(workerFarmMock.mock.calls).toEqual([
-        [
-          {config, globalConfig, path: './file.test.js', rawModuleMap},
-          expect.any(Function),
-        ],
-        [
-          {config, globalConfig, path: './file2.test.js', rawModuleMap},
-          expect.any(Function),
-        ],
+      expect(mockWorkerFarm.worker.mock.calls).toEqual([
+        [{config, globalConfig, path: './file.test.js', rawModuleMap}],
+        [{config, globalConfig, path: './file2.test.js', rawModuleMap}],
       ]);
     });
 });
@@ -73,7 +66,7 @@ test('does not inject the rawModuleMap in serial mode', () => {
       {serial: false},
     )
     .then(() => {
-      expect(workerFarmMock.mock.calls).toEqual([
+      expect(mockWorkerFarm.worker.mock.calls).toEqual([
         [
           {
             config,
@@ -81,7 +74,6 @@ test('does not inject the rawModuleMap in serial mode', () => {
             path: './file.test.js',
             rawModuleMap: null,
           },
-          expect.any(Function),
         ],
         [
           {
@@ -90,8 +82,26 @@ test('does not inject the rawModuleMap in serial mode', () => {
             path: './file2.test.js',
             rawModuleMap: null,
           },
-          expect.any(Function),
         ],
       ]);
+    });
+});
+
+test('assign process.env.JEST_WORKER_ID = 1 when in runInBand mode', () => {
+  const globalConfig = {maxWorkers: 1, watch: false};
+  const config = {rootDir: '/path/'};
+  const context = {config};
+
+  return new TestRunner(globalConfig)
+    .runTests(
+      [{context, path: './file.test.js'}],
+      new TestWatcher({isWatchMode: globalConfig.watch}),
+      () => {},
+      () => {},
+      () => {},
+      {serial: true},
+    )
+    .then(() => {
+      expect(process.env.JEST_WORKER_ID).toBe('1');
     });
 });

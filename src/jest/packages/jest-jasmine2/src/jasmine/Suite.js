@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  */
 // This file is a heavily modified fork of Jasmine. Original license:
@@ -39,7 +38,7 @@ import expectationResultFactory from '../expectation_result_factory';
 export default function Suite(attrs: Object) {
   this.id = attrs.id;
   this.parentSuite = attrs.parentSuite;
-  this.description = attrs.description;
+  this.description = convertDescriptorToString(attrs.description);
   this.throwOnExpectationFailure = !!attrs.throwOnExpectationFailure;
 
   this.beforeFns = [];
@@ -55,6 +54,7 @@ export default function Suite(attrs: Object) {
     description: this.description,
     fullName: this.getFullName(),
     failedExpectations: [],
+    testPath: attrs.getTestPath(),
   };
 }
 
@@ -182,8 +182,35 @@ Suite.prototype.addExpectationResult = function() {
   }
 };
 
+function convertDescriptorToString(descriptor) {
+  if (
+    typeof descriptor === 'string' ||
+    typeof descriptor === 'number' ||
+    descriptor === undefined
+  ) {
+    return descriptor;
+  }
+
+  if (typeof descriptor !== 'function') {
+    throw new Error('describe expects a class, function, number, or string.');
+  }
+
+  if (descriptor.name !== undefined) {
+    return descriptor.name;
+  }
+
+  const stringified = descriptor.toString();
+  const typeDescriptorMatch = stringified.match(/class|function/);
+  const indexOfNameSpace =
+    typeDescriptorMatch.index + typeDescriptorMatch[0].length;
+  const indexOfNameAfterSpace = stringified.search(/\(|\{/, indexOfNameSpace);
+  const name = stringified.substring(indexOfNameSpace, indexOfNameAfterSpace);
+
+  return name.trim();
+}
+
 function isAfterAll(children) {
-  return children && children[0].result.status;
+  return children && children[0] && children[0].result.status;
 }
 
 function isFailure(args) {

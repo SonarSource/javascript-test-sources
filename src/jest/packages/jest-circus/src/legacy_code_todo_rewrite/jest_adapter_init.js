@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -97,9 +96,8 @@ export const runAndTransformResultsToJestFormat = async ({
       case 'pass':
         status = 'passed';
         break;
-      case 'skip':
+      default:
         status = 'pending';
-        break;
     }
 
     const ancestorTitles = testResult.testPath.filter(
@@ -130,6 +128,7 @@ export const runAndTransformResultsToJestFormat = async ({
     console: null,
     displayName: config.displayName,
     failureMessage,
+    leaks: false, // That's legacy code, just adding it so Flow is happy.
     numFailingTests,
     numPassingTests,
     numPendingTests,
@@ -144,6 +143,7 @@ export const runAndTransformResultsToJestFormat = async ({
       fileDeleted: false,
       matched: 0,
       unchecked: 0,
+      uncheckedKeys: [],
       unmatched: 0,
       updated: 0,
     },

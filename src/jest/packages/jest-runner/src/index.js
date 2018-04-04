@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -18,12 +17,16 @@ import type {
   TestWatcher,
 } from 'types/TestRunner';
 
-import pify from 'pify';
+import typeof {worker} from './test_worker';
+
+import exit from 'exit';
 import runTest from './run_test';
 import throat from 'throat';
-import workerFarm from 'worker-farm';
+import Worker from 'jest-worker';
 
 const TEST_WORKER_PATH = require.resolve('./test_worker');
+
+type WorkerInterface = Worker & {worker: worker};
 
 class TestRunner {
   _globalConfig: GlobalConfig;
@@ -58,6 +61,7 @@ class TestRunner {
     onResult: OnTestSuccess,
     onFailure: OnTestFailure,
   ) {
+    process.env.JEST_WORKER_ID = '1';
     const mutex = throat(1);
     return tests.reduce(
       (promise, test) =>
@@ -90,17 +94,15 @@ class TestRunner {
     onResult: OnTestSuccess,
     onFailure: OnTestFailure,
   ) {
-    const farm = workerFarm(
-      {
-        autoStart: true,
-        maxConcurrentCallsPerWorker: 1,
-        maxConcurrentWorkers: this._globalConfig.maxWorkers,
-        maxRetries: 2, // Allow for a couple of transient errors.
-      },
-      TEST_WORKER_PATH,
-    );
+    // $FlowFixMe: class object is augmented with worker when instantiating.
+    const worker: WorkerInterface = new Worker(TEST_WORKER_PATH, {
+      exposedMethods: ['worker'],
+      forkOptions: {stdio: 'inherit'},
+      maxRetries: 3,
+      numWorkers: this._globalConfig.maxWorkers,
+    });
+
     const mutex = throat(this._globalConfig.maxWorkers);
-    const worker = pify(farm);
 
     // Send test suites to workers continuously instead of all at once to track
     // the start time of individual tests.
@@ -109,8 +111,10 @@ class TestRunner {
         if (watcher.isInterrupted()) {
           return Promise.reject();
         }
+
         await onStart(test);
-        return worker({
+
+        return worker.worker({
           config: test.context.config,
           globalConfig: this._globalConfig,
           path: test.path,
@@ -127,7 +131,7 @@ class TestRunner {
           'A worker process has quit unexpectedly! ' +
             'Most likely this is an initialization error.',
         );
-        process.exit(1);
+        exit(1);
       }
     };
 
@@ -147,7 +151,7 @@ class TestRunner {
       ),
     );
 
-    const cleanup = () => workerFarm.end(farm);
+    const cleanup = () => worker.end();
     return Promise.race([runAllTests, onInterrupt]).then(cleanup, cleanup);
   }
 }

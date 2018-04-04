@@ -1,9 +1,8 @@
 /**
- * Copyright (c) 2014, Facebook, Inc. All rights reserved.
+ * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -15,7 +14,7 @@ import type {ResolveModuleConfig} from 'types/Resolve';
 import fs from 'fs';
 import path from 'path';
 import nodeModulesPaths from './node_modules_paths';
-import isBuiltinModule from 'is-builtin-module';
+import isBuiltinModule from './is_builtin_module';
 import defaultResolver from './default_resolver.js';
 import chalk from 'chalk';
 
@@ -47,7 +46,7 @@ type ModuleNameMapperConfig = {|
   moduleName: string,
 |};
 
-type BooleanObject = {[key: string]: boolean};
+type BooleanObject = {[key: string]: boolean, __proto__: null};
 
 const NATIVE_PLATFORM = 'native';
 
@@ -55,8 +54,7 @@ const NATIVE_PLATFORM = 'native';
 const cwd = process.cwd();
 const resolvedCwd = fs.realpathSync(cwd) || cwd;
 const nodePaths = process.env.NODE_PATH
-  ? process.env.NODE_PATH
-      .split(path.delimiter)
+  ? process.env.NODE_PATH.split(path.delimiter)
       .filter(Boolean)
       // The resolver expects absolute paths.
       .map(p => path.resolve(resolvedCwd, p))
@@ -65,9 +63,9 @@ const nodePaths = process.env.NODE_PATH
 class Resolver {
   _options: ResolverConfig;
   _moduleMap: ModuleMap;
-  _moduleIDCache: {[key: string]: string};
-  _moduleNameCache: {[name: string]: Path};
-  _modulePathCache: {[path: Path]: Array<Path>};
+  _moduleIDCache: {[key: string]: string, __proto__: null};
+  _moduleNameCache: {[name: string]: Path, __proto__: null};
+  _modulePathCache: {[path: Path]: Array<Path>, __proto__: null};
 
   constructor(moduleMap: ModuleMap, options: ResolverConfig) {
     this._options = {
@@ -121,10 +119,14 @@ class Resolver {
     const defaultPlatform = this._options.defaultPlatform;
     const extensions = this._options.extensions.slice();
     if (this._supportsNativePlatform()) {
-      extensions.unshift('.' + NATIVE_PLATFORM + '.js');
+      extensions.unshift(
+        ...this._options.extensions.map(ext => '.' + NATIVE_PLATFORM + ext),
+      );
     }
     if (defaultPlatform) {
-      extensions.unshift('.' + defaultPlatform + '.js');
+      extensions.unshift(
+        ...this._options.extensions.map(ext => '.' + defaultPlatform + ext),
+      );
     }
 
     // 0. If we have already resolved this module for this directory name,

@@ -1,16 +1,15 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
 
 import {ChildProcess, spawn} from 'child_process';
-
 import ProjectWorkspace from './project_workspace';
+import type {SpawnOptions} from './types';
 
 /**
  * Spawns and returns a Jest process with specific args
@@ -21,6 +20,7 @@ import ProjectWorkspace from './project_workspace';
 export const createProcess = (
   workspace: ProjectWorkspace,
   args: Array<string>,
+  options?: SpawnOptions = {},
 ): ChildProcess => {
   // A command could look like `npm run test`, which we cannot use as a command
   // as they can only be the first command, so take out the command, and add
@@ -32,10 +32,9 @@ export const createProcess = (
   const runtimeArgs = [].concat(initialArgs, args);
 
   // If a path to configuration file was defined, push it to runtimeArgs
-  const configPath = workspace.pathToConfig;
-  if (configPath !== '') {
+  if (workspace.pathToConfig) {
     runtimeArgs.push('--config');
-    runtimeArgs.push(configPath);
+    runtimeArgs.push(workspace.pathToConfig);
   }
 
   // To use our own commands in create-react, we need to tell the command that
@@ -43,5 +42,10 @@ export const createProcess = (
   const env = process.env;
   env['CI'] = 'true';
 
-  return spawn(command, runtimeArgs, {cwd: workspace.rootPath, env});
+  const spawnOptions = {
+    cwd: workspace.rootPath,
+    env,
+    shell: options.shell,
+  };
+  return spawn(command, runtimeArgs, spawnOptions);
 };

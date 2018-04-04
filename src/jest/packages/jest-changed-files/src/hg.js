@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -18,6 +17,17 @@ const env = Object.assign({}, process.env, {
   HGPLAIN: 1,
 });
 
+const ANCESTORS = [
+  // Parent commit to this one.
+  '.^',
+
+  // The first commit of my branch, only if we are not on the default branch.
+  'min(branch(.)) and not min(branch(default))',
+
+  // Latest public commit.
+  'max(public())',
+];
+
 const adapter: SCMAdapter = {
   findChangedFiles: async (
     cwd: string,
@@ -26,7 +36,9 @@ const adapter: SCMAdapter = {
     return new Promise((resolve, reject) => {
       let args = ['status', '-amnu'];
       if (options && options.withAncestor) {
-        args.push('--rev', 'ancestor(.^)');
+        args.push('--rev', `ancestor(${ANCESTORS.join(', ')})`);
+      } else if (options && options.changedSince) {
+        args.push('--rev', `ancestor(., ${options.changedSince})`);
       } else if (options && options.lastCommit === true) {
         args = ['tip', '--template', '{files%"{file}\n"}'];
       }

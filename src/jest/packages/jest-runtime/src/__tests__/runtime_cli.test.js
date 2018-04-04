@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -11,9 +10,9 @@
 
 const path = require('path');
 const {sync: spawnSync} = require('cross-spawn');
-const skipOnWindows = require('../../../../scripts/skip_on_windows');
+const SkipOnWindows = require('../../../../scripts/SkipOnWindows');
 
-skipOnWindows.suite();
+SkipOnWindows.suite();
 
 const JEST_RUNTIME = path.resolve(__dirname, '../../bin/jest-runtime.js');
 

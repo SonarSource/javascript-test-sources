@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -43,7 +42,7 @@ const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
 const COMMENT_NODE = 8;
 
-const ELEMENT_REGEXP = /^(HTML|SVG)\w*?Element$/;
+const ELEMENT_REGEXP = /^((HTML|SVG)\w*)?Element$/;
 
 const testNode = (nodeType: any, name: any) =>
   (nodeType === ELEMENT_NODE && ELEMENT_REGEXP.test(name)) ||

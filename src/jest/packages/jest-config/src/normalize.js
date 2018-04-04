@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -24,8 +23,9 @@ import {replacePathSepForRegex} from 'jest-regex-util';
 import {
   BULLET,
   DOCUMENTATION_NOTE,
-  _replaceRootDirInPath,
+  replaceRootDirInPath,
   _replaceRootDirTags,
+  escapeGlobCharacters,
   getTestEnvironment,
   resolve,
 } from './utils';
@@ -46,12 +46,27 @@ const PRESET_NAME = 'jest-preset' + JSON_EXTENSION;
 const createConfigError = message =>
   new ValidationError(ERROR, message, DOCUMENTATION_NOTE);
 
+const mergeOptionWithPreset = (
+  options: InitialOptions,
+  preset: InitialOptions,
+  optionName: string,
+) => {
+  if (options[optionName] && preset[optionName]) {
+    options[optionName] = Object.assign(
+      {},
+      options[optionName],
+      preset[optionName],
+      options[optionName],
+    );
+  }
+};
+
 const setupPreset = (
   options: InitialOptions,
   optionsPreset: string,
 ): InitialOptions => {
   let preset;
-  const presetPath = _replaceRootDirInPath(options.rootDir, optionsPreset);
+  const presetPath = replaceRootDirInPath(options.rootDir, optionsPreset);
   const presetModule = Resolver.findNodeModule(
     presetPath.endsWith(JSON_EXTENSION)
       ? presetPath
@@ -65,6 +80,11 @@ const setupPreset = (
     // $FlowFixMe
     preset = (require(presetModule): InitialOptions);
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw createConfigError(
+        `  Preset ${chalk.bold(presetPath)} is invalid:\n  ${error.message}`,
+      );
+    }
     throw createConfigError(`  Preset ${chalk.bold(presetPath)} not found.`);
   }
 
@@ -76,14 +96,8 @@ const setupPreset = (
       options.modulePathIgnorePatterns,
     );
   }
-  if (options.moduleNameMapper && preset.moduleNameMapper) {
-    options.moduleNameMapper = Object.assign(
-      {},
-      options.moduleNameMapper,
-      preset.moduleNameMapper,
-      options.moduleNameMapper,
-    );
-  }
+  mergeOptionWithPreset(options, preset, 'moduleNameMapper');
+  mergeOptionWithPreset(options, preset, 'transform');
 
   return Object.assign({}, preset, options);
 };
@@ -132,7 +146,7 @@ const normalizeCollectCoverageOnlyFrom = (
   return collectCoverageOnlyFrom.reduce((map, filePath) => {
     filePath = path.resolve(
       options.rootDir,
-      _replaceRootDirInPath(options.rootDir, filePath),
+      replaceRootDirInPath(options.rootDir, filePath),
     );
     map[filePath] = true;
     return map;
@@ -153,6 +167,12 @@ const normalizeCollectCoverageFrom = (options: InitialOptions, key: string) => {
     Array.isArray(value) || (value = [options[key]]);
   } else {
     value = options[key];
+  }
+
+  if (value) {
+    value = value.map(filePath => {
+      return filePath.replace(/^(!?)(<rootDir>\/)(.*)/, '$1$3');
+    });
   }
 
   return value;
@@ -251,7 +271,7 @@ const normalizeReporters = (options: InitialOptions, basedir) => {
           [reporterConfig, {}]
         : reporterConfig;
 
-    const reporterPath = _replaceRootDirInPath(
+    const reporterPath = replaceRootDirInPath(
       options.rootDir,
       normalizedReporterConfig[0],
     );
@@ -275,25 +295,29 @@ const normalizeReporters = (options: InitialOptions, basedir) => {
 };
 
 const buildTestPathPattern = (argv: Argv): string => {
+  const patterns = [];
+
+  if (argv._) {
+    patterns.push(...argv._);
+  }
   if (argv.testPathPattern) {
-    if (validatePattern(argv.testPathPattern)) {
-      return argv.testPathPattern;
-    } else {
-      showTestPathPatternError(argv.testPathPattern);
-    }
+    patterns.push(...argv.testPathPattern);
   }
 
-  if (argv._ && argv._.length) {
-    const testPathPattern = argv._.join('|');
-
-    if (validatePattern(testPathPattern)) {
-      return testPathPattern;
-    } else {
-      showTestPathPatternError(testPathPattern);
+  const replacePosixSep = (pattern: string) => {
+    if (path.sep === '/') {
+      return pattern;
     }
-  }
+    return pattern.replace(/\//g, '\\\\');
+  };
 
-  return '';
+  const testPathPattern = patterns.map(replacePosixSep).join('|');
+  if (validatePattern(testPathPattern)) {
+    return testPathPattern;
+  } else {
+    showTestPathPatternError(testPathPattern);
+    return '';
+  }
 };
 
 const showTestPathPatternError = (testPathPattern: string) => {
@@ -367,7 +391,7 @@ export default function normalize(options: InitialOptions, argv: Argv) {
           options[key].map(filePath =>
             path.resolve(
               options.rootDir,
-              _replaceRootDirInPath(options.rootDir, filePath),
+              replaceRootDirInPath(options.rootDir, filePath),
             ),
           );
         break;
@@ -380,9 +404,11 @@ export default function normalize(options: InitialOptions, argv: Argv) {
           options[key] &&
           path.resolve(
             options.rootDir,
-            _replaceRootDirInPath(options.rootDir, options[key]),
+            replaceRootDirInPath(options.rootDir, options[key]),
           );
         break;
+      case 'globalSetup':
+      case 'globalTeardown':
       case 'moduleLoader':
       case 'resolver':
       case 'runner':
@@ -423,7 +449,7 @@ export default function normalize(options: InitialOptions, argv: Argv) {
           value.hasteImplModulePath = resolve(
             options.rootDir,
             'haste.hasteImplModulePath',
-            _replaceRootDirInPath(options.rootDir, value.hasteImplModulePath),
+            replaceRootDirInPath(options.rootDir, value.hasteImplModulePath),
           );
         }
         break;
@@ -434,28 +460,39 @@ export default function normalize(options: InitialOptions, argv: Argv) {
             // Project can be specified as globs. If a glob matches any files,
             // We expand it to these paths. If not, we keep the original path
             // for the future resolution.
-            const globMatches = glob.sync(project);
+            const globMatches =
+              typeof project === 'string' ? glob.sync(project) : [];
             return projects.concat(globMatches.length ? globMatches : project);
           }, []);
         break;
       case 'moduleDirectories':
       case 'testMatch':
-        value = _replaceRootDirTags(options.rootDir, options[key]);
+        value = _replaceRootDirTags(
+          escapeGlobCharacters(options.rootDir),
+          options[key],
+        );
+        break;
+      case 'testRegex':
+        value = options[key] && replacePathSepForRegex(options[key]);
         break;
       case 'automock':
       case 'bail':
       case 'browser':
       case 'cache':
+      case 'changedSince':
       case 'changedFilesWithAncestor':
       case 'clearMocks':
       case 'collectCoverage':
       case 'coverageReporters':
       case 'coverageThreshold':
+      case 'detectLeaks':
       case 'displayName':
       case 'expand':
       case 'globals':
       case 'findRelatedTests':
+      case 'forceCoverageMatch':
       case 'forceExit':
+      case 'lastCommit':
       case 'listTests':
       case 'logHeapUsage':
       case 'mapCoverage':
@@ -463,20 +500,24 @@ export default function normalize(options: InitialOptions, argv: Argv) {
       case 'name':
       case 'noStackTrace':
       case 'notify':
+      case 'notifyMode':
       case 'onlyChanged':
       case 'outputFile':
+      case 'passWithNoTests':
       case 'replname':
       case 'reporters':
       case 'resetMocks':
       case 'resetModules':
+      case 'restoreMocks':
       case 'rootDir':
       case 'runTestsByPath':
       case 'silent':
       case 'skipNodeResolution':
       case 'testEnvironment':
+      case 'testEnvironmentOptions':
       case 'testFailureExitCode':
+      case 'testLocationInResults':
       case 'testNamePattern':
-      case 'testRegex':
       case 'testURL':
       case 'timers':
       case 'useStderr':
@@ -486,6 +527,11 @@ export default function normalize(options: InitialOptions, argv: Argv) {
       case 'watchman':
         value = options[key];
         break;
+      case 'watchPlugins':
+        value = (options[key] || []).map(watchPlugin =>
+          resolve(options.rootDir, key, watchPlugin),
+        );
+        break;
     }
     newOptions[key] = value;
     return newOptions;
@@ -494,12 +540,25 @@ export default function normalize(options: InitialOptions, argv: Argv) {
   newOptions.nonFlagArgs = argv._;
   newOptions.testPathPattern = buildTestPathPattern(argv);
   newOptions.json = argv.json;
-  newOptions.lastCommit = argv.lastCommit;
 
   newOptions.testFailureExitCode = parseInt(newOptions.testFailureExitCode, 10);
 
-  if (argv.all || newOptions.testPathPattern) {
+  for (const key of [
+    'lastCommit',
+    'changedFilesWithAncestor',
+    'changedSince',
+  ]) {
+    if (newOptions[key]) {
+      newOptions.onlyChanged = true;
+    }
+  }
+
+  if (argv.all) {
     newOptions.onlyChanged = false;
+  } else if (newOptions.testPathPattern) {
+    // When passing a test path pattern we don't want to only monitor changed
+    // files unless `--watch` is also passed.
+    newOptions.onlyChanged = newOptions.watch;
   }
 
   newOptions.updateSnapshot =
@@ -535,8 +594,24 @@ export default function normalize(options: InitialOptions, argv: Argv) {
 
   // If argv.json is set, coverageReporters shouldn't print a text report.
   if (argv.json) {
-    newOptions.coverageReporters = (newOptions.coverageReporters || [])
-      .filter(reporter => reporter !== 'text');
+    newOptions.coverageReporters = (newOptions.coverageReporters || []).filter(
+      reporter => reporter !== 'text',
+    );
+  }
+
+  // If collectCoverage is enabled while using --findRelatedTests we need to
+  // avoid having false negatives in the generated coverage report.
+  // The following: `--findRelatedTests '/rootDir/file1.js' --coverage`
+  // Is transformed to: `--findRelatedTests '/rootDir/file1.js' --coverage --collectCoverageFrom 'file1.js'`
+  // where arguments to `--collectCoverageFrom` should be globs (or relative
+  // paths to the rootDir)
+  if (newOptions.collectCoverage && argv.findRelatedTests) {
+    newOptions.collectCoverageFrom = argv._.map(filename => {
+      filename = replaceRootDirInPath(options.rootDir, filename);
+      return path.isAbsolute(filename)
+        ? path.relative(options.rootDir, filename)
+        : filename;
+    });
   }
 
   return {

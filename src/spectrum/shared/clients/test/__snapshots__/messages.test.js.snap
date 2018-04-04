@@ -1,0 +1,35 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`should add a timestamp above the first message 1`] = `
+Array [
+  Array [
+    Object {
+      "author": Object {
+        "user": Object {
+          "id": "robo",
+        },
+      },
+      "message": Object {
+        "content": 2016-12-31T23:00:00.000Z,
+        "type": "timestamp",
+      },
+      "timestamp": 2016-12-31T23:00:00.000Z,
+    },
+  ],
+  Array [
+    Object {
+      "author": Object {
+        "user": Object {
+          "id": "asdf123",
+        },
+      },
+      "content": Object {
+        "body": "Hey",
+      },
+      "id": "whatever",
+      "messageType": "text",
+      "timestamp": 2016-12-31T23:00:00.000Z,
+    },
+  ],
+]
+`;

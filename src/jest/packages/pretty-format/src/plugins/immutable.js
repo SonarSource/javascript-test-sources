@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -51,7 +50,8 @@ const printImmutableEntries = (
       ) +
       '}';
 
-// Return an iterator for Immutable Record in v4 or later.
+// Record has an entries method because it is a collection in immutable v3.
+// Return an iterator for Immutable Record from version v3 or v4.
 const getRecordEntries = val => {
   let i = 0;
   return {
@@ -76,16 +76,20 @@ const printImmutableRecord = (
   // _name property is defined only for an Immutable Record instance
   // which was constructed with a second optional descriptive name arg
   const name = getImmutableName(val._name || 'Record');
-  const entries = typeof Array.isArray(val._keys)
-    ? getRecordEntries(val) // immutable v4
-    : val.entries(); // Record is a collection in immutable v3
   return ++depth > config.maxDepth
     ? printAsLeaf(name)
     : name +
-      SPACE +
-      '{' +
-      printIteratorEntries(entries, config, indentation, depth, refs, printer) +
-      '}';
+        SPACE +
+        '{' +
+        printIteratorEntries(
+          getRecordEntries(val),
+          config,
+          indentation,
+          depth,
+          refs,
+          printer,
+        ) +
+        '}';
 };
 
 const printImmutableSeq = (
@@ -229,7 +233,10 @@ export const serialize = (
   return printImmutableRecord(val, config, indentation, depth, refs, printer);
 };
 
+// Explicitly comparing sentinel properties to true avoids false positive
+// when mock identity-obj-proxy returns the key as the value for any key.
 export const test = (val: any) =>
-  val && (val[IS_ITERABLE_SENTINEL] || val[IS_RECORD_SENTINEL]);
+  val &&
+  (val[IS_ITERABLE_SENTINEL] === true || val[IS_RECORD_SENTINEL] === true);
 
 export default ({serialize, test}: NewPlugin);

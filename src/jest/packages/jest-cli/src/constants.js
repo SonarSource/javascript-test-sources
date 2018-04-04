@@ -1,17 +1,16 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
 
 const isWindows = process.platform === 'win32';
 
-export const CLEAR = isWindows ? '\x1Bc' : '\x1B[2J\x1B[3J\x1B[H';
-
+export const CLEAR = isWindows ? '\x1B[2J\x1B[0f' : '\x1B[2J\x1B[3J\x1B[H';
+export const ARROW = ' \u203A ';
 export const KEYS = {
   A: '61',
   ARROW_DOWN: '1b5b42',
@@ -24,10 +23,14 @@ export const KEYS = {
   CONTROL_D: '04',
   ENTER: '0d',
   ESCAPE: '1b',
+  F: '66',
+  I: '69',
   O: '6f',
   P: '70',
   Q: '71',
   QUESTION_MARK: '3f',
+  R: '72',
+  S: '73',
   T: '74',
   U: '75',
   W: '77',

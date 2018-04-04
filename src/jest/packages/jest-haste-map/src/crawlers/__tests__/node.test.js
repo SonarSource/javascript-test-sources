@@ -1,15 +1,14 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  */
 
 'use strict';
 
-const skipOnWindows = require('../../../../../scripts/skip_on_windows');
+const SkipOnWindows = require('../../../../../scripts/SkipOnWindows');
 
 jest.mock('child_process', () => ({
   spawn: jest.fn((cmd, args) => {
@@ -73,10 +72,13 @@ let nodeCrawl;
 let childProcess;
 
 describe('node crawler', () => {
-  skipOnWindows.suite();
+  SkipOnWindows.suite();
 
   beforeEach(() => {
     jest.resetModules();
+
+    // Remove the "process.platform" property descriptor so it can be writable.
+    delete process.platform;
 
     mockResponse = [
       '/fruits/pear.js',
@@ -123,9 +125,9 @@ describe('node crawler', () => {
       expect(data.files).not.toBe(null);
 
       expect(data.files).toEqual({
-        '/fruits/strawberry.js': ['', 32, 0, []],
-        '/fruits/tomato.js': ['', 33, 0, []],
-        '/vegetables/melon.json': ['', 34, 0, []],
+        '/fruits/strawberry.js': ['', 32, 0, [], null],
+        '/fruits/tomato.js': ['', 33, 0, [], null],
+        '/vegetables/melon.json': ['', 34, 0, [], null],
       });
     });
 
@@ -140,8 +142,8 @@ describe('node crawler', () => {
     const files = Object.create(null);
 
     // In this test sample, strawberry is changed and tomato is unchanged
-    const tomato = ['', 33, 1, []];
-    files['/fruits/strawberry.js'] = ['', 30, 1, []];
+    const tomato = ['', 33, 1, [], null];
+    files['/fruits/strawberry.js'] = ['', 30, 1, [], null];
     files['/fruits/tomato.js'] = tomato;
 
     return nodeCrawl({
@@ -151,7 +153,7 @@ describe('node crawler', () => {
       roots: ['/fruits'],
     }).then(data => {
       expect(data.files).toEqual({
-        '/fruits/strawberry.js': ['', 32, 0, []],
+        '/fruits/strawberry.js': ['', 32, 0, [], null],
         '/fruits/tomato.js': tomato,
       });
 
@@ -173,8 +175,8 @@ describe('node crawler', () => {
       roots: ['/fruits'],
     }).then(data => {
       expect(data.files).toEqual({
-        '/fruits/directory/strawberry.js': ['', 33, 0, []],
-        '/fruits/tomato.js': ['', 32, 0, []],
+        '/fruits/directory/strawberry.js': ['', 33, 0, [], null],
+        '/fruits/tomato.js': ['', 32, 0, [], null],
       });
     });
   });
@@ -193,13 +195,13 @@ describe('node crawler', () => {
       roots: ['/fruits'],
     }).then(data => {
       expect(data.files).toEqual({
-        '/fruits/directory/strawberry.js': ['', 33, 0, []],
-        '/fruits/tomato.js': ['', 32, 0, []],
+        '/fruits/directory/strawberry.js': ['', 33, 0, [], null],
+        '/fruits/tomato.js': ['', 32, 0, [], null],
       });
     });
   });
 
-  it('completes with emtpy roots', () => {
+  it('completes with empty roots', () => {
     process.platform = 'win32';
 
     nodeCrawl = require('../node');

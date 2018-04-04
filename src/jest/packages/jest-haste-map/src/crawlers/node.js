@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -137,8 +136,8 @@ module.exports = function nodeCrawl(
         if (existingFile && existingFile[H.MTIME] === mtime) {
           files[name] = existingFile;
         } else {
-          // See ../constants.js
-          files[name] = ['', mtime, 0, []];
+          // See ../constants.js; SHA-1 will always be null and fulfilled later.
+          files[name] = ['', mtime, 0, [], null];
         }
       });
       data.files = files;

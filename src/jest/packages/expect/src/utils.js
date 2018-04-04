@@ -1,14 +1,18 @@
 /**
- * Copyright (c) 2014, Facebook, Inc. All rights reserved.
+ * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
 
-import {equals, isA} from './jasmine_utils';
+import {
+  equals,
+  isA,
+  isImmutableUnorderedKeyed,
+  isImmutableUnorderedSet,
+} from './jasmine_utils';
 
 type GetPath = {
   hasEndProp?: boolean,
@@ -18,7 +22,8 @@ type GetPath = {
 };
 
 export const hasOwnProperty = (object: Object, value: string) =>
-  Object.prototype.hasOwnProperty.call(object, value);
+  Object.prototype.hasOwnProperty.call(object, value) ||
+  Object.prototype.hasOwnProperty.call(object.constructor.prototype, value);
 
 export const getPath = (
   object: Object,
@@ -28,40 +33,45 @@ export const getPath = (
     propertyPath = propertyPath.split('.');
   }
 
-  const lastProp = propertyPath.length === 1;
-
   if (propertyPath.length) {
+    const lastProp = propertyPath.length === 1;
     const prop = propertyPath[0];
     const newObject = object[prop];
+
     if (!lastProp && (newObject === null || newObject === undefined)) {
       // This is not the last prop in the chain. If we keep recursing it will
       // hit a `can't access property X of undefined | null`. At this point we
-      // know that the chain broken and we return right away.
+      // know that the chain has broken and we can return right away.
       return {
         hasEndProp: false,
         lastTraversedObject: object,
         traversedPath: [],
       };
-    } else {
-      const result = getPath(newObject, propertyPath.slice(1));
-      result.lastTraversedObject || (result.lastTraversedObject = object);
-      result.traversedPath.unshift(prop);
-      if (propertyPath.length === 1) {
-        result.hasEndProp = hasOwnProperty(object, prop);
-        if (!result.hasEndProp) {
-          delete result.value;
-          result.traversedPath.shift();
-        }
-      }
-      return result;
     }
-  } else {
-    return {
-      lastTraversedObject: null,
-      traversedPath: [],
-      value: object,
-    };
+
+    const result = getPath(newObject, propertyPath.slice(1));
+
+    if (result.lastTraversedObject === null) {
+      result.lastTraversedObject = object;
+    }
+
+    result.traversedPath.unshift(prop);
+
+    if (lastProp) {
+      result.hasEndProp = hasOwnProperty(object, prop);
+      if (!result.hasEndProp) {
+        result.traversedPath.shift();
+      }
+    }
+
+    return result;
   }
+
+  return {
+    lastTraversedObject: null,
+    traversedPath: [],
+    value: object,
+  };
 };
 
 // Strip properties from object that are not present in the subset. Useful for
@@ -114,7 +124,7 @@ export const iterableEquality = (a: any, b: any) => {
   if (a.size !== undefined) {
     if (a.size !== b.size) {
       return false;
-    } else if (isA('Set', a)) {
+    } else if (isA('Set', a) || isImmutableUnorderedSet(a)) {
       let allFound = true;
       for (const aValue of a) {
         if (!b.has(aValue)) {
@@ -125,7 +135,7 @@ export const iterableEquality = (a: any, b: any) => {
       if (allFound) {
         return true;
       }
-    } else if (isA('Map', a)) {
+    } else if (isA('Map', a) || isImmutableUnorderedKeyed(a)) {
       let allFound = true;
       for (const aEntry of a) {
         if (
@@ -164,7 +174,7 @@ const isObjectWithKeys = a =>
   !(a instanceof Date);
 
 export const subsetEquality = (object: Object, subset: Object) => {
-  if (!isObjectWithKeys(object) || !isObjectWithKeys(subset)) {
+  if (!isObjectWithKeys(subset)) {
     return undefined;
   }
 
@@ -185,3 +195,21 @@ export const partition = <T>(
 
   return result;
 };
+
+// Copied from https://github.com/graingert/angular.js/blob/a43574052e9775cbc1d7dd8a086752c979b0f020/src/Angular.js#L685-L693
+export const isError = (value: any) => {
+  switch (Object.prototype.toString.call(value)) {
+    case '[object Error]':
+      return true;
+    case '[object Exception]':
+      return true;
+    case '[object DOMException]':
+      return true;
+    default:
+      return value instanceof Error;
+  }
+};
+
+export function emptyObject(obj: any) {
+  return obj && typeof obj === 'object' ? !Object.keys(obj).length : false;
+}

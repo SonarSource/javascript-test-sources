@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -16,11 +15,12 @@ import type {Context} from 'types/Context';
 import type {Jest, LocalModuleRequire} from 'types/Jest';
 import type {ModuleMap} from 'jest-haste-map';
 import type {MockFunctionMetadata, ModuleMocker} from 'types/Mock';
+import type {SourceMapRegistry} from 'types/SourceMaps';
 
 import path from 'path';
 import HasteMap from 'jest-haste-map';
 import Resolver from 'jest-resolve';
-import {createDirectory} from 'jest-util';
+import {createDirectory, deepCyclicCopy} from 'jest-util';
 import {escapePathForRegex} from 'jest-regex-util';
 import fs from 'graceful-fs';
 import stripBOM from 'strip-bom';
@@ -30,13 +30,14 @@ import {run as cilRun} from './cli';
 import {options as cliOptions} from './cli/args';
 
 type Module = {|
-  children?: Array<any>,
+  children: Array<Module>,
   exports: any,
   filename: string,
   id: string,
+  loaded: boolean,
   parent?: Module,
   paths?: Array<Path>,
-  require?: Function,
+  require?: (id: string) => any,
 |};
 
 type HasteMapOptions = {|
@@ -54,12 +55,13 @@ type InternalModuleOptions = {|
 type CoverageOptions = {
   collectCoverage: boolean,
   collectCoverageFrom: Array<Glob>,
-  collectCoverageOnlyFrom: ?{[key: string]: boolean},
-  mapCoverage: boolean,
+  collectCoverageOnlyFrom: ?{[key: string]: boolean, __proto__: null},
 };
 
-type BooleanObject = {[key: string]: boolean};
-type CacheFS = {[path: Path]: string};
+type ModuleRegistry = {[key: string]: Module, __proto__: null};
+
+type BooleanObject = {[key: string]: boolean, __proto__: null};
+type CacheFS = {[path: Path]: string, __proto__: null};
 
 const NODE_MODULES = path.sep + 'node_modules' + path.sep;
 const SNAPSHOT_EXTENSION = 'snap';
@@ -76,12 +78,6 @@ const getModuleNameMapper = (config: ProjectConfig) => {
   return null;
 };
 
-const mockParentModule = {
-  exports: {},
-  filename: 'mock.js',
-  id: 'mockParent',
-};
-
 const unmockRegExpCache = new WeakMap();
 
 class Runtime {
@@ -93,18 +89,19 @@ class Runtime {
   _currentlyExecutingModulePath: string;
   _environment: Environment;
   _explicitShouldMock: BooleanObject;
-  _internalModuleRegistry: {[key: string]: Module};
+  _internalModuleRegistry: ModuleRegistry;
   _isCurrentlyExecutingManualMock: ?string;
-  _mockFactories: {[key: string]: () => any};
-  _mockMetaDataCache: {[key: string]: MockFunctionMetadata};
-  _mockRegistry: {[key: string]: any};
+  _mockFactories: {[key: string]: () => any, __proto__: null};
+  _mockMetaDataCache: {[key: string]: MockFunctionMetadata, __proto__: null};
+  _mockRegistry: {[key: string]: any, __proto__: null};
   _moduleMocker: ModuleMocker;
-  _moduleRegistry: {[key: string]: Module};
+  _moduleRegistry: ModuleRegistry;
+  _needsCoverageMapped: Set<string>;
   _resolver: Resolver;
   _shouldAutoMock: boolean;
   _shouldMockModuleCache: BooleanObject;
   _shouldUnmockTransitiveDependenciesCache: BooleanObject;
-  _sourceMapRegistry: {[key: string]: string};
+  _sourceMapRegistry: SourceMapRegistry;
   _scriptTransformer: ScriptTransformer;
   _transitiveShouldMock: BooleanObject;
   _unmockList: ?RegExp;
@@ -123,7 +120,6 @@ class Runtime {
       collectCoverage: false,
       collectCoverageFrom: [],
       collectCoverageOnlyFrom: null,
-      mapCoverage: false,
     };
     this._currentlyExecutingModulePath = '';
     this._environment = environment;
@@ -134,6 +130,7 @@ class Runtime {
     this._mockRegistry = Object.create(null);
     this._moduleMocker = this._environment.moduleMocker;
     this._moduleRegistry = Object.create(null);
+    this._needsCoverageMapped = new Set();
     this._resolver = resolver;
     this._scriptTransformer = new ScriptTransformer(config);
     this._shouldAutoMock = config.automock;
@@ -185,7 +182,6 @@ class Runtime {
         collectCoverage: options.collectCoverage,
         collectCoverageFrom: options.collectCoverageFrom,
         collectCoverageOnlyFrom: options.collectCoverageOnlyFrom,
-        mapCoverage: options.mapCoverage,
       },
       config,
     );
@@ -304,8 +300,7 @@ class Runtime {
     }
 
     if (moduleName && this._resolver.isCoreModule(moduleName)) {
-      // $FlowFixMe
-      return require(moduleName);
+      return this._requireCoreModule(moduleName);
     }
 
     if (!modulePath) {
@@ -316,10 +311,12 @@ class Runtime {
       // We must register the pre-allocated module object first so that any
       // circular dependencies that may arise while evaluating the module can
       // be satisfied.
-      const localModule = {
+      const localModule: Module = {
+        children: [],
         exports: {},
         filename: modulePath,
         id: modulePath,
+        loaded: false,
       };
       moduleRegistry[modulePath] = localModule;
       if (path.extname(modulePath) === '.json') {
@@ -330,8 +327,10 @@ class Runtime {
         // $FlowFixMe
         localModule.exports = require(modulePath);
       } else {
-        this._execModule(localModule, options);
+        this._execModule(localModule, options, moduleRegistry, from);
       }
+
+      localModule.loaded = true;
     }
     return moduleRegistry[modulePath].exports;
   }
@@ -361,39 +360,41 @@ class Runtime {
       modulePath = this._resolveModule(from, manualMock);
     } else {
       modulePath = this._resolveModule(from, moduleName);
-
-      // If the actual module file has a __mocks__ dir sitting immediately next
-      // to it, look to see if there is a manual mock for this file.
-      //
-      // subDir1/my_module.js
-      // subDir1/__mocks__/my_module.js
-      // subDir2/my_module.js
-      // subDir2/__mocks__/my_module.js
-      //
-      // Where some other module does a relative require into each of the
-      // respective subDir{1,2} directories and expects a manual mock
-      // corresponding to that particular my_module.js file.
-      const moduleDir = path.dirname(modulePath);
-      const moduleFileName = path.basename(modulePath);
-      const potentialManualMock = path.join(
-        moduleDir,
-        '__mocks__',
-        moduleFileName,
-      );
-      if (fs.existsSync(potentialManualMock)) {
-        manualMock = true;
-        modulePath = potentialManualMock;
-      }
+    }
+    // If the actual module file has a __mocks__ dir sitting immediately next
+    // to it, look to see if there is a manual mock for this file.
+    //
+    // subDir1/my_module.js
+    // subDir1/__mocks__/my_module.js
+    // subDir2/my_module.js
+    // subDir2/__mocks__/my_module.js
+    //
+    // Where some other module does a relative require into each of the
+    // respective subDir{1,2} directories and expects a manual mock
+    // corresponding to that particular my_module.js file.
+    const moduleDir = path.dirname(modulePath);
+    const moduleFileName = path.basename(modulePath);
+    const potentialManualMock = path.join(
+      moduleDir,
+      '__mocks__',
+      moduleFileName,
+    );
+    if (fs.existsSync(potentialManualMock)) {
+      manualMock = true;
+      modulePath = potentialManualMock;
     }
 
     if (manualMock) {
-      const localModule = {
+      const localModule: Module = {
+        children: [],
         exports: {},
         filename: modulePath,
         id: modulePath,
+        loaded: false,
       };
-      this._execModule(localModule);
+      this._execModule(localModule, undefined, this._mockRegistry, from);
       this._mockRegistry[moduleID] = localModule.exports;
+      localModule.loaded = true;
     } else {
       // Look for a real module to generate an automock from
       this._mockRegistry[moduleID] = this._generateMock(from, moduleName);
@@ -432,17 +433,25 @@ class Runtime {
     }
   }
 
-  getAllCoverageInfo() {
-    return this._environment.global.__coverage__;
+  getAllCoverageInfoCopy() {
+    return deepCyclicCopy(this._environment.global.__coverage__);
   }
 
-  getSourceMapInfo() {
+  getSourceMapInfo(coveredFiles: Set<string>) {
     return Object.keys(this._sourceMapRegistry).reduce((result, sourcePath) => {
-      if (fs.existsSync(this._sourceMapRegistry[sourcePath])) {
+      if (
+        coveredFiles.has(sourcePath) &&
+        this._needsCoverageMapped.has(sourcePath) &&
+        fs.existsSync(this._sourceMapRegistry[sourcePath])
+      ) {
         result[sourcePath] = this._sourceMapRegistry[sourcePath];
       }
       return result;
     }, {});
+  }
+
+  getSourceMaps(): SourceMapRegistry {
+    return this._sourceMapRegistry;
   }
 
   setMock(
@@ -480,7 +489,12 @@ class Runtime {
     return to ? this._resolver.resolveModule(from, to) : from;
   }
 
-  _execModule(localModule: Module, options: ?InternalModuleOptions) {
+  _execModule(
+    localModule: Module,
+    options: ?InternalModuleOptions,
+    moduleRegistry: ModuleRegistry,
+    from: Path,
+  ) {
     // If the environment was disposed, prevent this module from being executed.
     if (!this._environment.global) {
       return;
@@ -495,9 +509,23 @@ class Runtime {
 
     const dirname = path.dirname(filename);
     localModule.children = [];
-    localModule.parent = mockParentModule;
+
+    Object.defineProperty(
+      localModule,
+      'parent',
+      // https://github.com/facebook/flow/issues/285#issuecomment-270810619
+      ({
+        enumerable: true,
+        get() {
+          return moduleRegistry[from] || null;
+        },
+      }: Object),
+    );
+
     localModule.paths = this._resolver.getModulePaths(dirname);
-    localModule.require = this._createRequireImplementation(filename, options);
+    Object.defineProperty(localModule, 'require', {
+      value: this._createRequireImplementation(localModule, options),
+    });
 
     const transformedFile = this._scriptTransformer.transform(
       filename,
@@ -506,13 +534,15 @@ class Runtime {
         collectCoverageFrom: this._coverageOptions.collectCoverageFrom,
         collectCoverageOnlyFrom: this._coverageOptions.collectCoverageOnlyFrom,
         isInternalModule,
-        mapCoverage: this._coverageOptions.mapCoverage,
       },
       this._cacheFS[filename],
     );
 
     if (transformedFile.sourceMapPath) {
       this._sourceMapRegistry[filename] = transformedFile.sourceMapPath;
+      if (transformedFile.mapCoverage) {
+        this._needsCoverageMapped.add(filename);
+      }
     }
 
     const wrapper = this._environment.runScript(transformedFile.script)[
@@ -535,6 +565,15 @@ class Runtime {
 
     this._isCurrentlyExecutingManualMock = origCurrExecutingManualMock;
     this._currentlyExecutingModulePath = lastExecutingModulePath;
+  }
+
+  _requireCoreModule(moduleName: string) {
+    if (moduleName === 'process') {
+      return this._environment.global.process;
+    }
+
+    // $FlowFixMe
+    return require(moduleName);
   }
 
   _generateMock(from: Path, moduleName: string) {
@@ -644,18 +683,38 @@ class Runtime {
   }
 
   _createRequireImplementation(
-    from: Path,
+    from: Module,
     options: ?InternalModuleOptions,
   ): LocalModuleRequire {
     const moduleRequire =
       options && options.isInternalModule
-        ? (moduleName: string) => this.requireInternalModule(from, moduleName)
-        : this.requireModuleOrMock.bind(this, from);
+        ? (moduleName: string) =>
+            this.requireInternalModule(from.filename, moduleName)
+        : this.requireModuleOrMock.bind(this, from.filename);
     moduleRequire.cache = Object.create(null);
     moduleRequire.extensions = Object.create(null);
-    moduleRequire.requireActual = this.requireModule.bind(this, from);
-    moduleRequire.requireMock = this.requireMock.bind(this, from);
-    moduleRequire.resolve = moduleName => this._resolveModule(from, moduleName);
+    moduleRequire.requireActual = this.requireModule.bind(this, from.filename);
+    moduleRequire.requireMock = this.requireMock.bind(this, from.filename);
+    moduleRequire.resolve = moduleName =>
+      this._resolveModule(from.filename, moduleName);
+    Object.defineProperty(
+      moduleRequire,
+      'main',
+      ({
+        enumerable: true,
+        get() {
+          let mainModule = from.parent;
+          while (
+            mainModule &&
+            mainModule.parent &&
+            mainModule.id !== mainModule.parent.id
+          ) {
+            mainModule = mainModule.parent;
+          }
+          return mainModule;
+        },
+      }: Object),
+    );
     return moduleRequire;
   }
 
@@ -747,6 +806,8 @@ class Runtime {
     const jestObject = {
       addMatchers: (matchers: Object) =>
         this._environment.global.jasmine.addMatchers(matchers),
+      advanceTimersByTime: (msToRun: number) =>
+        this._environment.fakeTimers.advanceTimersByTime(msToRun),
       autoMockOff: disableAutomock,
       autoMockOn: enableAutomock,
       clearAllMocks,
@@ -775,7 +836,7 @@ class Runtime {
       runOnlyPendingTimers: () =>
         this._environment.fakeTimers.runOnlyPendingTimers(),
       runTimersToTime: (msToRun: number) =>
-        this._environment.fakeTimers.runTimersToTime(msToRun),
+        this._environment.fakeTimers.advanceTimersByTime(msToRun),
       setMock: (moduleName: string, mock: Object) =>
         setMockFactory(moduleName, () => mock),
       setTimeout,

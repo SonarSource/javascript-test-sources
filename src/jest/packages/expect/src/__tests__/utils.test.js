@@ -1,16 +1,15 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  */
 
 'use strict';
 
 const {stringify} = require('jest-matcher-utils');
-const {getObjectSubset, getPath} = require('../utils');
+const {emptyObject, getObjectSubset, getPath} = require('../utils');
 
 describe('getPath()', () => {
   test('property exists', () => {
@@ -47,6 +46,30 @@ describe('getPath()', () => {
     });
   });
 
+  test('property is a getter on class instance', () => {
+    class A {
+      get a() {
+        return 'a';
+      }
+      get b() {
+        return {c: 'c'};
+      }
+    }
+
+    expect(getPath(new A(), 'a')).toEqual({
+      hasEndProp: true,
+      lastTraversedObject: new A(),
+      traversedPath: ['a'],
+      value: 'a',
+    });
+    expect(getPath(new A(), 'b.c')).toEqual({
+      hasEndProp: true,
+      lastTraversedObject: {c: 'c'},
+      traversedPath: ['b', 'c'],
+      value: 'c',
+    });
+  });
+
   test('path breaks', () => {
     expect(getPath({a: {}}, 'a.b.c')).toEqual({
       hasEndProp: false,
@@ -56,11 +79,12 @@ describe('getPath()', () => {
     });
   });
 
-  test('empry object at the end', () => {
+  test('empty object at the end', () => {
     expect(getPath({a: {b: {c: {}}}}, 'a.b.c.d')).toEqual({
       hasEndProp: false,
       lastTraversedObject: {},
       traversedPath: ['a', 'b', 'c'],
+      value: undefined,
     });
   });
 });
@@ -81,5 +105,20 @@ describe('getObjectSubset()', () => {
         expect(getObjectSubset(object, subset)).toEqual(expected);
       },
     );
+  });
+});
+
+describe('emptyObject()', () => {
+  test('matches an empty object', () => {
+    expect(emptyObject({})).toBe(true);
+  });
+
+  test('does not match an object with keys', () => {
+    expect(emptyObject({foo: undefined})).toBe(false);
+  });
+
+  test('does not match a non-object', () => {
+    expect(emptyObject(null)).toBe(false);
+    expect(emptyObject(34)).toBe(false);
   });
 });

@@ -1,9 +1,8 @@
 /**
- * Copyright (c) 2014, Facebook, Inc. All rights reserved.
+ * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -13,6 +12,7 @@ import getType from 'jest-get-type';
 import prettyFormat from 'pretty-format';
 const {
   AsymmetricMatcher,
+  DOMCollection,
   DOMElement,
   Immutable,
   ReactElement,
@@ -23,14 +23,13 @@ const PLUGINS = [
   ReactTestComponent,
   ReactElement,
   DOMElement,
+  DOMCollection,
   Immutable,
   AsymmetricMatcher,
 ];
 
 export const EXPECTED_COLOR = chalk.green;
-export const EXPECTED_BG = chalk.bgGreen;
 export const RECEIVED_COLOR = chalk.red;
-export const RECEIVED_BG = chalk.bgRed;
 
 const NUMBERS = [
   'zero',
@@ -50,7 +49,7 @@ const NUMBERS = [
 ];
 
 export const SUGGEST_TO_EQUAL = chalk.dim(
-  'Looks like you wanted to test for object/array equality with strict `toBe` matcher. You probably need to use `toEqual` instead.',
+  'Looks like you wanted to test for object/array equality with the stricter `toBe` matcher. You probably need to use `toEqual` instead.',
 );
 
 export const stringify = (object: any, maxDepth?: number = 10): string => {
@@ -77,15 +76,13 @@ export const stringify = (object: any, maxDepth?: number = 10): string => {
     : result;
 };
 
-export const highlightTrailingWhitespace = (
-  text: string,
-  bgColor: Function,
-): string => text.replace(/\s+$/gm, bgColor('$&'));
+export const highlightTrailingWhitespace = (text: string): string =>
+  text.replace(/\s+$/gm, chalk.inverse('$&'));
 
 export const printReceived = (object: any) =>
-  highlightTrailingWhitespace(RECEIVED_COLOR(stringify(object)), RECEIVED_BG);
+  RECEIVED_COLOR(highlightTrailingWhitespace(stringify(object)));
 export const printExpected = (value: any) =>
-  highlightTrailingWhitespace(EXPECTED_COLOR(stringify(value)), EXPECTED_BG);
+  EXPECTED_COLOR(highlightTrailingWhitespace(stringify(value)));
 
 export const printWithType = (
   name: string,
@@ -153,19 +150,24 @@ export const matcherHint = (
   matcherName: string,
   received: string = 'received',
   expected: string = 'expected',
-  options: ?{
-    secondArgument?: ?string,
+  options: {
+    comment?: string,
     isDirectExpectCall?: boolean,
-  },
+    isNot?: boolean,
+    secondArgument?: ?string,
+  } = {},
 ) => {
-  const secondArgument = options && options.secondArgument;
-  const isDirectExpectCall = options && options.isDirectExpectCall;
+  const {comment, isDirectExpectCall, isNot, secondArgument} = options;
   return (
     chalk.dim('expect' + (isDirectExpectCall ? '' : '(')) +
     RECEIVED_COLOR(received) +
-    chalk.dim((isDirectExpectCall ? '' : ')') + matcherName + '(') +
+    (isNot
+      ? `${chalk.dim(').')}not${chalk.dim(matcherName + '(')}`
+      : chalk.dim((isDirectExpectCall ? '' : ')') + matcherName + '(')) +
     EXPECTED_COLOR(expected) +
-    (secondArgument ? `, ${EXPECTED_COLOR(secondArgument)}` : '') +
-    chalk.dim(')')
+    (secondArgument
+      ? `${chalk.dim(', ')}${EXPECTED_COLOR(secondArgument)}`
+      : '') +
+    chalk.dim(`)${comment ? ` // ${comment}` : ''}`)
   );
 };

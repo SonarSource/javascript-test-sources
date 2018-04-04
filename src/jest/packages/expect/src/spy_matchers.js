@@ -1,9 +1,8 @@
 /**
- * Copyright (c) 2014, Facebook, Inc. All rights reserved.
+ * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -25,11 +24,7 @@ import {
 } from 'jest-matcher-utils';
 import {equals} from './jasmine_utils';
 import {iterableEquality, partition} from './utils';
-
-const RECEIVED_NAME = {
-  'mock function': 'jest.fn()',
-  spy: 'spy',
-};
+import diff from 'jest-diff';
 
 const createToBeCalledMatcher = matcherName => (received, expected) => {
   ensureNoExpected(expected, matcherName);
@@ -37,6 +32,7 @@ const createToBeCalledMatcher = matcherName => (received, expected) => {
 
   const receivedIsSpy = isSpy(received);
   const type = receivedIsSpy ? 'spy' : 'mock function';
+  const receivedName = receivedIsSpy ? 'spy' : received.getMockName();
   const count = receivedIsSpy
     ? received.calls.count()
     : received.mock.calls.length;
@@ -46,14 +42,45 @@ const createToBeCalledMatcher = matcherName => (received, expected) => {
   const pass = count > 0;
   const message = pass
     ? () =>
-        matcherHint('.not' + matcherName, RECEIVED_NAME[type], '') +
+        matcherHint('.not' + matcherName, receivedName, '') +
         '\n\n' +
         `Expected ${type} not to be called ` +
         formatReceivedCalls(calls, CALL_PRINT_LIMIT, {sameSentence: true})
     : () =>
-        matcherHint(matcherName, RECEIVED_NAME[type], '') +
+        matcherHint(matcherName, receivedName, '') +
         '\n\n' +
         `Expected ${type} to have been called.`;
+
+  return {message, pass};
+};
+
+const createToBeCalledTimesMatcher = (matcherName: string) => (
+  received: any,
+  expected: number,
+) => {
+  ensureExpectedIsNumber(expected, matcherName);
+  ensureMock(received, matcherName);
+
+  const receivedIsSpy = isSpy(received);
+  const type = receivedIsSpy ? 'spy' : 'mock function';
+  const receivedName = receivedIsSpy ? 'spy' : received.getMockName();
+  const count = receivedIsSpy
+    ? received.calls.count()
+    : received.mock.calls.length;
+  const pass = count === expected;
+  const message = pass
+    ? () =>
+        matcherHint('.not' + matcherName, receivedName, String(expected)) +
+        `\n\n` +
+        `Expected ${type} not to be called ` +
+        `${EXPECTED_COLOR(pluralize('time', expected))}, but it was` +
+        ` called exactly ${RECEIVED_COLOR(pluralize('time', count))}.`
+    : () =>
+        matcherHint(matcherName, receivedName, String(expected)) +
+        '\n\n' +
+        `Expected ${type} to have been called ` +
+        `${EXPECTED_COLOR(pluralize('time', expected))},` +
+        ` but it was called ${RECEIVED_COLOR(pluralize('time', count))}.`;
 
   return {message, pass};
 };
@@ -66,6 +93,7 @@ const createToBeCalledWithMatcher = matcherName => (
 
   const receivedIsSpy = isSpy(received);
   const type = receivedIsSpy ? 'spy' : 'mock function';
+  const receivedName = receivedIsSpy ? 'spy' : received.getMockName();
   const calls = receivedIsSpy
     ? received.calls.all().map(x => x.args)
     : received.mock.calls;
@@ -77,12 +105,12 @@ const createToBeCalledWithMatcher = matcherName => (
 
   const message = pass
     ? () =>
-        matcherHint('.not' + matcherName, RECEIVED_NAME[type]) +
+        matcherHint('.not' + matcherName, receivedName) +
         '\n\n' +
         `Expected ${type} not to have been called with:\n` +
         `  ${printExpected(expected)}`
     : () =>
-        matcherHint(matcherName, RECEIVED_NAME[type]) +
+        matcherHint(matcherName, receivedName) +
         '\n\n' +
         `Expected ${type} to have been called with:\n` +
         formatMismatchedCalls(fail, expected, CALL_PRINT_LIMIT);
@@ -98,6 +126,7 @@ const createLastCalledWithMatcher = matcherName => (
 
   const receivedIsSpy = isSpy(received);
   const type = receivedIsSpy ? 'spy' : 'mock function';
+  const receivedName = receivedIsSpy ? 'spy' : received.getMockName();
   const calls = receivedIsSpy
     ? received.calls.all().map(x => x.args)
     : received.mock.calls;
@@ -105,12 +134,12 @@ const createLastCalledWithMatcher = matcherName => (
 
   const message = pass
     ? () =>
-        matcherHint('.not' + matcherName, RECEIVED_NAME[type]) +
+        matcherHint('.not' + matcherName, receivedName) +
         '\n\n' +
         `Expected ${type} to not have been last called with:\n` +
         `  ${printExpected(expected)}`
     : () =>
-        matcherHint(matcherName, RECEIVED_NAME[type]) +
+        matcherHint(matcherName, receivedName) +
         '\n\n' +
         `Expected ${type} to have been last called with:\n` +
         formatMismatchedCalls(calls, expected, LAST_CALL_PRINT_LIMIT);
@@ -118,45 +147,64 @@ const createLastCalledWithMatcher = matcherName => (
   return {message, pass};
 };
 
+const createNthCalledWithMatcher = (matcherName: string) => (
+  received: any,
+  nth: number,
+  ...expected: any
+) => {
+  ensureMock(received, matcherName);
+
+  const receivedIsSpy = isSpy(received);
+  const type = receivedIsSpy ? 'spy' : 'mock function';
+
+  if (typeof nth !== 'number' || parseInt(nth, 10) !== nth || nth < 1) {
+    const message = () =>
+      `nth value ${printReceived(
+        nth,
+      )} must be a positive integer greater than ${printExpected(0)}`;
+    const pass = false;
+    return {message, pass};
+  }
+
+  const receivedName = receivedIsSpy ? 'spy' : received.getMockName();
+  const calls = receivedIsSpy
+    ? received.calls.all().map(x => x.args)
+    : received.mock.calls;
+  const pass = equals(calls[nth - 1], expected, [iterableEquality]);
+
+  const message = pass
+    ? () =>
+        matcherHint('.not' + matcherName, receivedName) +
+        '\n\n' +
+        `Expected ${type} ${nthToString(
+          nth,
+        )} call to not have been called with:\n` +
+        `  ${printExpected(expected)}`
+    : () =>
+        matcherHint(matcherName, receivedName) +
+        '\n\n' +
+        `Expected ${type} ${nthToString(
+          nth,
+        )} call to have been called with:\n` +
+        formatMismatchedCalls(calls, expected, LAST_CALL_PRINT_LIMIT);
+
+  return {message, pass};
+};
+
 const spyMatchers: MatchersObject = {
   lastCalledWith: createLastCalledWithMatcher('.lastCalledWith'),
+  nthCalledWith: createNthCalledWithMatcher('.nthCalledWith'),
   toBeCalled: createToBeCalledMatcher('.toBeCalled'),
+  toBeCalledTimes: createToBeCalledTimesMatcher('.toBeCalledTimes'),
   toBeCalledWith: createToBeCalledWithMatcher('.toBeCalledWith'),
   toHaveBeenCalled: createToBeCalledMatcher('.toHaveBeenCalled'),
-  toHaveBeenCalledTimes(received: any, expected: number) {
-    const matcherName = '.toHaveBeenCalledTimes';
-    ensureExpectedIsNumber(expected, matcherName);
-    ensureMock(received, matcherName);
-
-    const receivedIsSpy = isSpy(received);
-    const type = receivedIsSpy ? 'spy' : 'mock function';
-    const count = receivedIsSpy
-      ? received.calls.count()
-      : received.mock.calls.length;
-    const pass = count === expected;
-    const message = pass
-      ? () =>
-          matcherHint(
-            '.not' + matcherName,
-            RECEIVED_NAME[type],
-            String(expected),
-          ) +
-          `\n\n` +
-          `Expected ${type} not to be called ` +
-          `${EXPECTED_COLOR(pluralize('time', expected))}, but it was` +
-          ` called exactly ${RECEIVED_COLOR(pluralize('time', count))}.`
-      : () =>
-          matcherHint(matcherName, RECEIVED_NAME[type], String(expected)) +
-          '\n\n' +
-          `Expected ${type} to have been called ` +
-          `${EXPECTED_COLOR(pluralize('time', expected))},` +
-          ` but it was called ${RECEIVED_COLOR(pluralize('time', count))}.`;
-
-    return {message, pass};
-  },
+  toHaveBeenCalledTimes: createToBeCalledTimesMatcher('.toHaveBeenCalledTimes'),
   toHaveBeenCalledWith: createToBeCalledWithMatcher('.toHaveBeenCalledWith'),
   toHaveBeenLastCalledWith: createLastCalledWithMatcher(
     '.toHaveBeenLastCalledWith',
+  ),
+  toHaveBeenNthCalledWith: createNthCalledWithMatcher(
+    '.toHaveBeenNthCalledWith',
   ),
 };
 
@@ -178,15 +226,27 @@ const ensureMock = (mockOrSpy, matcherName) => {
   }
 };
 
+const getPrintedCalls = (
+  calls: any[],
+  limit: number,
+  sep: string,
+  fn: Function,
+): string => {
+  const result = [];
+  let i = calls.length;
+
+  while (--i >= 0 && --limit >= 0) {
+    result.push(fn(calls[i]));
+  }
+
+  return result.join(sep);
+};
+
 const formatReceivedCalls = (calls, limit, options) => {
   if (calls.length) {
     const but = options && options.sameSentence ? 'but' : 'But';
     const count = calls.length - limit;
-    const printedCalls = calls
-      .slice(-limit)
-      .reverse()
-      .map(printReceived)
-      .join(', ');
+    const printedCalls = getPrintedCalls(calls, limit, ', ', printReceived);
     return (
       `${but} it was ${options && options.isLast ? 'last ' : ''}called ` +
       `with:\n  ` +
@@ -202,11 +262,12 @@ const formatReceivedCalls = (calls, limit, options) => {
 
 const formatMismatchedCalls = (calls, expected, limit) => {
   if (calls.length) {
-    return calls
-      .slice(-limit)
-      .reverse()
-      .map(formatMismatchedArgs.bind(null, expected))
-      .join('\n\n');
+    return getPrintedCalls(
+      calls,
+      limit,
+      '\n\n',
+      formatMismatchedArgs.bind(null, expected),
+    );
   } else {
     return (
       `  ${printExpected(expected)}\n` +
@@ -221,13 +282,34 @@ const formatMismatchedArgs = (expected, received) => {
   const printedArgs = [];
   for (let i = 0; i < length; i++) {
     if (!equals(expected[i], received[i], [iterableEquality])) {
+      const diffString = diff(expected[i], received[i]);
       printedArgs.push(
-        `  ${printExpected(expected[i])} as argument ${i + 1}, ` +
+        `  ${printExpected(expected[i])}\n` +
+          `as argument ${i + 1}, but it was called with\n` +
+          `  ${printReceived(received[i])}.` +
+          (diffString ? `\n\nDifference:\n\n${diffString}` : ''),
+      );
+    } else if (i >= expected.length) {
+      printedArgs.push(
+        `  Did not expect argument ${i + 1} ` +
           `but it was called with ${printReceived(received[i])}.`,
       );
     }
   }
+
   return printedArgs.join('\n');
+};
+
+const nthToString = (nth: number) => {
+  switch (nth) {
+    case 1:
+      return 'first';
+    case 2:
+      return 'second';
+    case 3:
+      return 'third';
+  }
+  return `${nth}th`;
 };
 
 export default spyMatchers;

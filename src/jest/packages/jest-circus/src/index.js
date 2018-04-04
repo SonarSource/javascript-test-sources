@@ -1,9 +1,8 @@
 /**
  * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -39,8 +38,22 @@ const beforeAll = (fn: HookFn) => _addHook(fn, 'beforeAll');
 const afterEach = (fn: HookFn) => _addHook(fn, 'afterEach');
 const afterAll = (fn: HookFn) => _addHook(fn, 'afterAll');
 
-const test = (testName: TestName, fn?: TestFn) =>
-  dispatch({fn, name: 'add_test', testName});
+const test = (testName: TestName, fn: TestFn) => {
+  if (typeof testName !== 'string') {
+    throw new Error(
+      `Invalid first argument, ${testName}. It must be a string.`,
+    );
+  }
+  if (fn === undefined) {
+    throw new Error('Missing second argument. It must be a callback function.');
+  }
+  if (typeof fn !== 'function') {
+    throw new Error(
+      `Invalid second argument, ${fn}. It must be a callback function.`,
+    );
+  }
+  return dispatch({fn, name: 'add_test', testName});
+};
 const it = test;
 test.skip = (testName: TestName, fn?: TestFn) =>
   dispatch({fn, mode: 'skip', name: 'add_test', testName});
