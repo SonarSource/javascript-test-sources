@@ -19,7 +19,6 @@ import type {UpdateQueue} from 'react-reconciler/src/ReactFiberUpdateQueue';
 import type {ReactNodeList} from 'shared/ReactTypes';
 import ReactFiberReconciler from 'react-reconciler';
 import {enablePersistentReconciler} from 'shared/ReactFeatureFlags';
-import * as ReactInstanceMap from 'shared/ReactInstanceMap';
 import * as ReactPortal from 'shared/ReactPortal';
 import emptyObject from 'fbjs/lib/emptyObject';
 import expect from 'expect';
@@ -134,7 +133,7 @@ let SharedHostConfig = {
       throw new Error('Should have old props');
     }
     if (newProps === null) {
-      throw new Error('Should have old props');
+      throw new Error('Should have new props');
     }
     return UPDATE_SIGNAL;
   },
@@ -401,8 +400,7 @@ const ReactNoop = {
     if (typeof component.id === 'number') {
       return component;
     }
-    const inst = ReactInstanceMap.get(component);
-    return inst ? NoopRenderer.findHostInstance(inst) : null;
+    return NoopRenderer.findHostInstance(component);
   },
 
   flushDeferredPri(timeout: number = Infinity): Array<mixed> {
