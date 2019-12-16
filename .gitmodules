@@ -1,0 +1,68 @@
+[submodule "jquery"]
+	path = jquery
+	url = https://github.com/SonarSource/jquery.git
+	ignore = untracked
+[submodule "angular.js"]
+	path = angular.js
+	url = https://github.com/SonarSource/angular.js.git
+	ignore = untracked
+[submodule "p5.js"]
+	path = p5.js
+	url = https://github.com/SonarSource/p5.js.git
+	ignore = untracked
+[submodule "amplify"]
+	path = amplify
+	url = https://github.com/SonarSource/amplify.git
+	ignore = untracked
+[submodule "backbone"]
+	path = backbone
+	url = https://github.com/SonarSource/backbone.git
+	ignore = untracked
+[submodule "es5-shim"]
+	path = es5-shim
+	url = https://github.com/SonarSource/es5-shim.git
+	ignore = untracked
+[submodule "jshint"]
+	path = jshint
+	url = https://github.com/SonarSource/jshint.git
+	ignore = untracked
+[submodule "jStorage"]
+	path = jStorage
+	url = https://github.com/SonarSource/jStorage.git
+	ignore = untracked
+[submodule "knockout"]
+	path = knockout
+	url = https://github.com/SonarSource/knockout.git
+	ignore = untracked
+[submodule "mootools-core"]
+	path = mootools-core
+	url = https://github.com/SonarSource/mootools-core.git
+	ignore = untracked
+[submodule "ocanvas"]
+	path = ocanvas
+	url = https://github.com/SonarSource/ocanvas.git
+	ignore = untracked
+[submodule "paper.js"]
+	path = paper.js
+	url = https://github.com/SonarSource/paper.js.git
+	ignore = untracked
+[submodule "prototype"]
+	path = prototype
+	url = https://github.com/SonarSource/prototype.git
+	ignore = untracked
+[submodule "qunit"]
+	path = qunit
+	url = https://github.com/SonarSource/qunit.git
+	ignore = untracked
+[submodule "sizzle"]
+	path = sizzle
+	url = https://github.com/SonarSource/sizzle.git
+	ignore = untracked
+[submodule "underscore"]
+	path = underscore
+	url = https://github.com/SonarSource/underscore.git
+	ignore = untracked
+[submodule "di.js"]
+	path = di.js
+	url = https://github.com/SonarSource/di.js.git
+	ignore = untracked
