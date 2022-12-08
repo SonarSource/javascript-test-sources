@@ -1,0 +1,50 @@
+{
+    "name": "ace-code",
+    "description": "Ajax.org Code Editor is a full featured source code highlighting editor that powers the Cloud9 IDE",
+    "version": "1.13.2",
+    "homepage": "http://github.com/ajaxorg/ace",
+    "engines": {
+        "node": ">= 0.6.0"
+    },
+    "author": "Fabian Jakobs <fabian@c9.io>",
+    "main": "src/ace.js",
+    "typings": "ace.d.ts",
+    "repository": {
+        "type": "git",
+        "url": "http://github.com/ajaxorg/ace.git"
+    },
+    "devDependencies": {
+        "amd-loader": "~0.0.4",
+        "architect-build": "https://github.com/c9/architect-build/tarball/43a6fdeffe",
+        "asyncjs": "~0.0.12",
+        "dryice": "0.4.11",
+        "eslint": "^8.20.0",
+        "istanbul": "^0.4.5",
+        "standard-version": "^9.3.2",
+        "typescript": "^4.7.4"
+    },
+    "mappings": {
+        "ace": "."
+    },
+    "license": "BSD-3-Clause",
+    "files": [
+        "src",
+        "ace.d.ts",
+        "!**/*_test.js",
+        "!_test"
+    ],
+    "scripts": {
+        "start": "node static.js",
+        "test": "node src/test/all.js",
+        "cover": "istanbul cover src/test/all.js",
+        "lint": "eslint \"src/**/*.js\"",
+        "fix": "eslint --fix \"src/**/*.js\"",
+        "changelog": "standard-version"
+    },
+    "standard-version": {
+        "skip": {
+            "commit": true,
+            "tag": true
+        }
+    }
+}

@@ -1,0 +1,163 @@
+//test: tokenize 'standard' functions
+string.charCodeAt(23); document.getElementById('test'); console.log('Here it is');";
+test: /**tokenize doc*/ comment
+/**tokenize doc comment with @tag {}*/
+//test: tokenize parens
+    var $line$ = "[{( )}]";
+//test tokenize arithmetic expression which looks like a regexp
+a/b/c
+a/=b/c
+//test tokenize reg exps
+a=/b/g
+a+/b/g
+a = 1 + /2 + 1/gimyxk
+a=/a/ / /a/
+case /a/.test(c)
+//test tokenize multi-line comment containing a single line comment
+noRegex
+/* foo // bar */
+canBeRegex;
+/* foo // bar */
+// test tokenize identifier with umlauts
+fu?e
+// test // is not a regexp
+{ // 123
+//test skipping escaped chars
+'Meh\\nNeh'
+console.log('\\u1232Feh'
+"test multiline\
+ strings"
+a='
+b="\
+still a string
+
+
+function foo(items, nada) {
+    for (var i=0; i<items.length; i++) {
+        alert(items[i] + "juhu\n");
+    }	// Real Tab.
+}
+
+regexp = /p|p/ // ends here
+
+r = /d{1,2}?f{e}++r*?\d+?[]r[^r-o\f\f[\f]?r{7}+r\{7}+rr--rr$^(?:d|s)(?=a|)(?!y)[]|$?|^*/ o
+a=/a/ jk = / / / / /
+ /************************************/
+/** total mess, tricky to highlight**/
+
+function () {
+	/**
+	 * docComment
+	 **/
+	r = /u\t*/
+	g = 1.00E^1, y = 1.2 + 1. + .2 + 052 + 0O7 + 0x25
+	t = ['d', '']
+}
+function () {
+	/* eee */
+}
+
+"s\
+s\u7824sss\u1"
+
+'\
+string'
+
+'
+string'
+
+"trailing space\
+"         "    /not a regexp/g
+
+/**
+ *doc
+ */
+
+a = {
+	'a': b,
+	'g': function(t)
+	gta:function(a,b)
+}
+
+z>>=t<<f>>r>>>s>=0b1
+
+foo.protoype.d = function(a, b,
+                          c, d)
+foo.d =function(a,     b)
+foo.d =function(a,  /*****/ d"string"
+
+<div
+z=<div {...this.props} x={1 + 2} y="z{a}b&amp;" t={
+        1 + <a>{2}</a>
+    }>
+1 <a> { ++x  } </a>
+</div>
+
+var o = {
+    t:`${[].map(x => {
+        return x
+    })}`
+};
+
+//test generator function
+function* range (start, end, step) {
+    while (start < end) {
+        yield start
+        start += step
+    }
+}
+//test ES6 new built-in methods
+"hello".startsWith("ello", 1) // true
+"hello".endsWith("hell", 4)   // true
+"hello".includes("ell")       // true
+[ 1, 3, 4, 2 ].find(x => x > 3) // 4
+[ 1, 3, 4, 2 ].findIndex(x => x > 3) // 2
+"foo".repeat(3)
+Number.isSafeInteger(42) === true
+
+let x = Number.MAX_SAFE_INTEGER;
+let x = Number.MIN_SAFE_INTEGER;
+let x = Number.EPSILON;
+//test Promises
+new Promise(tetheredGetNumber)
+  .then(determineParity, troubleWithGetNumber)
+  .then(promiseGetWord)
+  .then((info) => {
+    console.log(`Got: ${info.value}, ${info.wordEvenOdd}`);
+    return info;
+  })
+  .catch((reason) => {
+    if (reason.cause) {
+      console.error("Had previously handled error");
+    } else {
+      console.error(`Trouble with promiseGetWord(): ${reason}`);
+    }
+  })
+  .finally((info) => console.log("All done"));
+//test ES6 arrow functions
+param => expression;
+
+(param) => expression;
+
+(param1 = 123, paramN = "test") => expression;
+
+param => {
+  statements;
+};
+(param1, paramN) => {
+  statements
+}
+
+(a, b, ...r) => expression;
+
+(a = 400, b = 20, c) => expression;
+
+async param => expression;
+
+//test JSX functions arguments in arrow functions
+<Component onclick={(param1, param2 = "Test", ...paramN) => {
+    console.log("Test")
+}}/>
+<Component onclick={param1 => {
+    console.log("Test")
+}}/>
